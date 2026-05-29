@@ -1,0 +1,218 @@
+[
+  {
+    "id": "cninfo_home",
+    "name": "CNINFO disclosure home",
+    "category": "disclosure",
+    "url": "https://www.cninfo.com.cn/new/index",
+    "method": "GET",
+    "parserType": "html",
+    "enabled": true,
+    "charset": "UTF-8",
+    "userAgent": "MyMoneyBot/1.0",
+    "delayMillis": 3000,
+    "timeoutMillis": 15000,
+    "selectors": {
+      "title": "title",
+      "content": "body",
+      "time": ""
+    }
+  },
+  {
+    "id": "sse_announcements",
+    "name": "SSE latest announcements",
+    "category": "disclosure",
+    "url": "https://www.sse.com.cn/disclosure/listedinfo/announcement/",
+    "method": "GET",
+    "parserType": "html",
+    "enabled": true,
+    "charset": "UTF-8",
+    "userAgent": "MyMoneyBot/1.0",
+    "delayMillis": 3000,
+    "timeoutMillis": 15000,
+    "selectors": {
+      "title": "title",
+      "content": "body",
+      "time": ""
+    }
+  },
+  {
+    "id": "szse_announcements",
+    "name": "SZSE listed company announcements",
+    "category": "disclosure",
+    "url": "https://www.szse.cn/disclosure/listed/notice/index.html",
+    "method": "GET",
+    "parserType": "html",
+    "enabled": true,
+    "charset": "UTF-8",
+    "userAgent": "MyMoneyBot/1.0",
+    "delayMillis": 3000,
+    "timeoutMillis": 15000,
+    "selectors": {
+      "title": "title",
+      "content": "body",
+      "time": ""
+    }
+  },
+  {
+    "id": "eastmoney_news_search",
+    "name": "Eastmoney search page",
+    "category": "news",
+    "url": "https://so.eastmoney.com/news/s?keyword={stockName}%20{stockCode}",
+    "method": "GET",
+    "parserType": "html",
+    "enabled": true,
+    "charset": "UTF-8",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "delayMillis": 300,
+    "timeoutMillis": 15000,
+    "selectors": {
+      "title": "title",
+      "content": "body",
+      "time": ""
+    }
+  },
+  {
+    "id": "eastmoney_search_json",
+    "name": "Eastmoney stock news",
+    "category": "news",
+    "url": "https://search-api-web.eastmoney.com/search/jsonp?cb=MyMoneyNewsCallback&param={eastmoneySearchParam}&_=1700000000000",
+    "method": "GET",
+    "parserType": "eastmoney_search_json",
+    "enabled": true,
+    "charset": "UTF-8",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "delayMillis": 300,
+    "timeoutMillis": 15000,
+    "selectors": {
+      "title": "title",
+      "content": "body",
+      "time": ""
+    }
+  },
+  {
+    "id": "eastmoney_code_search_json",
+    "name": "Eastmoney code news",
+    "category": "news",
+    "url": "https://search-api-web.eastmoney.com/search/jsonp?cb=MyMoneyNewsCallback&param={eastmoneyCodeSearchParam}&_=1700000000001",
+    "method": "GET",
+    "parserType": "eastmoney_search_json",
+    "enabled": true,
+    "charset": "UTF-8",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "delayMillis": 300,
+    "timeoutMillis": 15000,
+    "selectors": {
+      "title": "title",
+      "content": "body",
+      "time": ""
+    }
+  },
+  {
+    "id": "eastmoney_industry_search_json",
+    "name": "Eastmoney industry news",
+    "category": "news",
+    "url": "https://search-api-web.eastmoney.com/search/jsonp?cb=MyMoneyNewsCallback&param={eastmoneyIndustrySearchParam}&_=1700000000002",
+    "method": "GET",
+    "parserType": "eastmoney_search_json",
+    "enabled": true,
+    "charset": "UTF-8",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "delayMillis": 300,
+    "timeoutMillis": 15000,
+    "selectors": {
+      "title": "title",
+      "content": "body",
+      "time": ""
+    }
+  },
+  {
+    "id": "eastmoney_notice_search",
+    "name": "Eastmoney announcement search",
+    "category": "news",
+    "url": "https://searchapi.eastmoney.com/business/Web/GetSearchList?type=401&pageindex=1&pagesize=10&keyword={stockName}&name=normal",
+    "method": "GET",
+    "parserType": "eastmoney_notice_json",
+    "enabled": true,
+    "charset": "UTF-8",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "delayMillis": 300,
+    "timeoutMillis": 15000,
+    "selectors": {
+      "title": "title",
+      "content": "body",
+      "time": ""
+    }
+  },
+  {
+    "id": "eastmoney_finance_column",
+    "name": "Eastmoney finance column",
+    "category": "news",
+    "url": "https://np-listapi.eastmoney.com/comm/web/getNewsByColumns?client=web&biz=web_news_col&column=345&order=1&needInteractData=0&page_index=1&page_size=30&req_trace=1700000000003&fields=code,showTime,title,mediaName,summary,url,uniqueUrl&types=1,20",
+    "method": "GET",
+    "parserType": "eastmoney_column_json",
+    "enabled": true,
+    "charset": "UTF-8",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "delayMillis": 300,
+    "timeoutMillis": 15000,
+    "selectors": {
+      "title": "title",
+      "content": "body",
+      "time": ""
+    }
+  },
+  {
+    "id": "eastmoney_stock_column",
+    "name": "Eastmoney stock column",
+    "category": "news",
+    "url": "https://np-listapi.eastmoney.com/comm/web/getNewsByColumns?client=web&biz=web_news_col&column=351&order=1&needInteractData=0&page_index=1&page_size=30&req_trace=1700000000004&fields=code,showTime,title,mediaName,summary,url,uniqueUrl&types=1,20",
+    "method": "GET",
+    "parserType": "eastmoney_column_json",
+    "enabled": true,
+    "charset": "UTF-8",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "delayMillis": 300,
+    "timeoutMillis": 15000,
+    "selectors": {
+      "title": "title",
+      "content": "body",
+      "time": ""
+    }
+  },
+  {
+    "id": "eastmoney_hsf10_news",
+    "name": "Eastmoney F10 bulletin page",
+    "category": "news",
+    "url": "https://emweb.eastmoney.com/PC_HSF10/NewsBulletin/Index?code={eastmoneySecCode}&type=web",
+    "method": "GET",
+    "parserType": "eastmoney_hsf10",
+    "enabled": true,
+    "charset": "UTF-8",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "delayMillis": 300,
+    "timeoutMillis": 15000,
+    "selectors": {
+      "title": "title",
+      "content": "body",
+      "time": ""
+    }
+  },
+  {
+    "id": "bing_news_search",
+    "name": "Bing news search",
+    "category": "news",
+    "url": "https://www.bing.com/news/search?q={stockName}%20{stockCode}%20{industry}&format=rss",
+    "method": "GET",
+    "parserType": "rss",
+    "enabled": true,
+    "charset": "UTF-8",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "delayMillis": 300,
+    "timeoutMillis": 15000,
+    "selectors": {
+      "title": "title",
+      "content": "body",
+      "time": ""
+    }
+  }
+]
