@@ -4,10 +4,6 @@ import android.net.Uri;
 
 import com.face.mymoney.model.Stock;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -17,6 +13,7 @@ public class StockOpinionFetcher {
     private static final int TIMEOUT_MILLIS = 15000;
     private static final int MAX_READ_BYTES = 512 * 1024;
     private static final int MAX_TOTAL = 24;
+    private final com.face.mymoney.crawler.SimpleHttpClient httpClient = new com.face.mymoney.crawler.SimpleHttpClient();
 
     public ArrayList<Opinion> fetchForStock(Stock stock) {
         ArrayList<Opinion> opinions = new ArrayList<Opinion>();
@@ -203,53 +200,18 @@ public class StockOpinionFetcher {
     }
 
     private WebText fetch(String url, String source) {
-        HttpURLConnection connection = null;
-        long start = System.currentTimeMillis();
-        try {
-            connection = (HttpURLConnection) new URL(url).openConnection();
-            connection.setRequestMethod("GET");
-            connection.setConnectTimeout(TIMEOUT_MILLIS);
-            connection.setReadTimeout(TIMEOUT_MILLIS);
-            connection.setInstanceFollowRedirects(true);
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0");
-            connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-            int statusCode = connection.getResponseCode();
-            InputStream inputStream = statusCode >= 400 ? connection.getErrorStream() : connection.getInputStream();
-            String body = readText(inputStream);
-            android.util.Log.d(TAG, "fetch source=" + source + ", status=" + statusCode
-                    + ", length=" + body.length()
-                    + ", elapsedMs=" + (System.currentTimeMillis() - start));
-            return new WebText(statusCode >= 200 && statusCode < 400, body);
-        } catch (Exception e) {
-            android.util.Log.w(TAG, "fetch failed source=" + source + ", error=" + e.getClass().getSimpleName() + ": " + e.getMessage());
+        com.face.mymoney.crawler.SimpleHttpClient.HttpText response = httpClient.get(url, TIMEOUT_MILLIS, MAX_READ_BYTES,
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0");
+        android.util.Log.d(TAG, "fetch source=" + source + ", status=" + response.statusCode
+                + ", success=" + response.isHttpSuccess()
+                + ", length=" + response.body.length()
+                + ", elapsedMs=" + response.elapsedMillis);
+        if (!response.isHttpSuccess()) {
+            android.util.Log.w(TAG, "fetch failed source=" + source + ", error=" + response.errorMessage);
             return new WebText(false, "");
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
         }
-    }
-
-    private String readText(InputStream inputStream) throws Exception {
-        if (inputStream == null) {
-            return "";
-        }
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        byte[] buffer = new byte[4096];
-        int total = 0;
-        int length;
-        while ((length = inputStream.read(buffer)) != -1) {
-            int allow = Math.min(length, MAX_READ_BYTES - total);
-            if (allow > 0) {
-                outputStream.write(buffer, 0, allow);
-                total += allow;
-            }
-            if (total >= MAX_READ_BYTES) {
-                break;
-            }
-        }
-        inputStream.close();
-        return outputStream.toString("UTF-8");
+        return new WebText(true, response.body);
     }
 
     private void addOpinions(ArrayList<Opinion> target, ArrayList<Opinion> source) {

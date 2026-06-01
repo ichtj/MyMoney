@@ -6,6 +6,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.widget.Button;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
@@ -14,6 +15,7 @@ import android.widget.TextView;
 
 import com.face.mymoney.R;
 import com.face.mymoney.model.DecisionNote;
+import com.face.mymoney.model.MarketIndexQuote;
 import com.face.mymoney.model.Stock;
 import com.face.mymoney.ui.MainUiKit;
 
@@ -24,8 +26,6 @@ public class HomePageBuilder {
         void onAddStock();
 
         void onAddGroup();
-
-        void onRefreshQuotes();
 
         void onGroupSelected(String group);
 
@@ -45,6 +45,8 @@ public class HomePageBuilder {
     private static final int COLOR_ACCENT_SOFT = Color.rgb(234, 241, 255);
     private static final int COLOR_RISE = Color.rgb(217, 45, 32);
     private static final int COLOR_FALL = Color.rgb(7, 148, 85);
+    private static final int ACTION_WIDTH_DP = 124;
+    private static final int ACTION_TRIGGER_DP = 58;
 
     private final Context context;
     private final MainUiKit ui;
@@ -53,14 +55,17 @@ public class HomePageBuilder {
     private final ArrayList<Stock> stocks;
     private final ArrayList<Stock> displayStocks;
     private final ArrayList<DecisionNote> notes;
+    private final ArrayList<MarketIndexQuote> marketIndices;
     private final ArrayList<String> groups;
     private final String selectedGroup;
     private final int riskStockCount;
+    private final int touchSlop;
     private LinearLayout openActionRow;
 
     public HomePageBuilder(Context context, MainUiKit ui, Listener listener, String userName,
                            ArrayList<Stock> stocks, ArrayList<Stock> displayStocks,
-                           ArrayList<DecisionNote> notes, ArrayList<String> groups,
+                           ArrayList<DecisionNote> notes, ArrayList<MarketIndexQuote> marketIndices,
+                           ArrayList<String> groups,
                            String selectedGroup, int riskStockCount) {
         this.context = context;
         this.ui = ui;
@@ -69,15 +74,17 @@ public class HomePageBuilder {
         this.stocks = stocks;
         this.displayStocks = displayStocks;
         this.notes = notes;
+        this.marketIndices = marketIndices;
         this.groups = groups;
         this.selectedGroup = selectedGroup;
         this.riskStockCount = riskStockCount;
+        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
     }
 
     public ScrollView build() {
         ScrollView scrollView = new ScrollView(context);
         LinearLayout page = ui.vertical();
-        page.setPadding(ui.dp(18), ui.dp(16), ui.dp(18), ui.dp(24));
+        page.setPadding(ui.dp(12), ui.dp(10), ui.dp(12), ui.dp(18));
         page.setClickable(true);
         page.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -90,7 +97,7 @@ public class HomePageBuilder {
         LinearLayout header = ui.horizontal();
         header.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout titleBox = ui.vertical();
-        TextView title = ui.text(context.getString(R.string.home_title), 28, COLOR_TEXT, true);
+        TextView title = ui.text(context.getString(R.string.home_title), 24, COLOR_TEXT, true);
         title.setOnLongClickListener(new View.OnLongClickListener() {
             @Override
             public boolean onLongClick(View v) {
@@ -102,27 +109,18 @@ public class HomePageBuilder {
         titleBox.addView(ui.text(userName, 13, COLOR_SUB, false), ui.matchWrap());
         header.addView(titleBox, ui.weightWrap(1));
         page.addView(header, ui.matchWrap());
-        page.addView(ui.spacer(ui.dp(18)));
+        page.addView(ui.spacer(ui.dp(8)));
 
         page.addView(buildSummaryCard(), ui.matchWrap());
-        page.addView(ui.spacer(ui.dp(18)));
-        page.addView(buildGroupHeader(), ui.matchWrap());
         page.addView(ui.spacer(ui.dp(10)));
+        page.addView(buildGroupHeader(), ui.matchWrap());
+        page.addView(ui.spacer(ui.dp(6)));
         page.addView(buildGroupBar(), ui.matchWrap());
-        page.addView(ui.spacer(ui.dp(14)));
+        page.addView(ui.spacer(ui.dp(8)));
 
         LinearLayout row = ui.horizontal();
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.addView(ui.text(context.getString(R.string.watchlist_title), 21, COLOR_TEXT, true), ui.weightWrap(1));
-        Button refresh = ui.ghostButton(context.getString(R.string.refresh_quote_button));
-        refresh.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                listener.onRefreshQuotes();
-            }
-        });
-        row.addView(refresh, ui.wrapHeight(ui.dp(42)));
-        row.addView(ui.spacer(ui.dp(8), ui.dp(1)));
+        row.addView(ui.text(context.getString(R.string.watchlist_title), 18, COLOR_TEXT, true), ui.weightWrap(1));
         Button add = ui.primaryButton(context.getString(R.string.add_button));
         add.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -130,9 +128,9 @@ public class HomePageBuilder {
                 listener.onAddStock();
             }
         });
-        row.addView(add, ui.wrapHeight(ui.dp(42)));
+        row.addView(add, ui.wrapHeight(ui.dp(36)));
         page.addView(row, ui.matchWrap());
-        page.addView(ui.spacer(ui.dp(10)));
+        page.addView(ui.spacer(ui.dp(7)));
 
         if (displayStocks.size() == 0) {
             LinearLayout empty = ui.card();
@@ -143,7 +141,7 @@ public class HomePageBuilder {
         } else {
             for (int i = 0; i < displayStocks.size(); i++) {
                 page.addView(buildStockCard(displayStocks.get(i)), ui.matchWrap());
-                page.addView(ui.spacer(ui.dp(12)));
+                page.addView(ui.spacer(ui.dp(7)));
             }
         }
         return scrollView;
@@ -151,32 +149,62 @@ public class HomePageBuilder {
 
     private View buildSummaryCard() {
         LinearLayout card = ui.card();
+        card.setPadding(ui.dp(12), ui.dp(10), ui.dp(12), ui.dp(10));
         GradientDrawable bg = ui.rounded(COLOR_TEXT, ui.dp(18));
         card.setBackground(bg);
 
-        TextView title = ui.text(context.getString(R.string.summary_title), 18, Color.WHITE, true);
-        TextView sub = ui.text(context.getString(R.string.summary_format, stocks.size(), notes.size(), riskStockCount), 13, Color.rgb(204, 213, 225), false);
+        TextView title = ui.text("大盘指数", 15, Color.WHITE, true);
+        TextView sub = ui.text(context.getString(R.string.summary_format, stocks.size(), notes.size(), riskStockCount), 11, Color.rgb(204, 213, 225), false);
         card.addView(title, ui.matchWrap());
-        card.addView(ui.spacer(ui.dp(8)));
+        card.addView(ui.spacer(ui.dp(5)));
         card.addView(sub, ui.matchWrap());
-        card.addView(ui.spacer(ui.dp(16)));
+        card.addView(ui.spacer(ui.dp(8)));
 
+        HorizontalScrollView scroll = new HorizontalScrollView(context);
+        scroll.setHorizontalScrollBarEnabled(false);
         LinearLayout metrics = ui.horizontal();
-        metrics.addView(metricBox(context.getString(R.string.summary_news_title), context.getString(R.string.summary_news_value)), ui.weightWrap(1));
-        metrics.addView(ui.spacer(ui.dp(10), ui.dp(1)));
-        metrics.addView(metricBox(context.getString(R.string.summary_plan_title), context.getString(R.string.summary_plan_value)), ui.weightWrap(1));
-        card.addView(metrics, ui.matchWrap());
+        if (marketIndices.size() == 0) {
+            metrics.addView(metricBox("大盘", "加载中", "--"), ui.wrapHeight(ui.dp(50)));
+        } else {
+            for (int i = 0; i < marketIndices.size(); i++) {
+                MarketIndexQuote quote = marketIndices.get(i);
+                metrics.addView(metricBox(quote.name, quote.price, quote.changePercent), ui.wrapHeight(ui.dp(50)));
+                metrics.addView(ui.spacer(ui.dp(5), ui.dp(1)));
+            }
+        }
+        scroll.addView(metrics, ui.wrapWrap());
+        card.addView(scroll, ui.matchWrap());
         return card;
     }
 
-    private View metricBox(String title, String value) {
+    private View metricBox(String title, String value, String changePercent) {
         LinearLayout box = ui.vertical();
-        box.setPadding(ui.dp(12), ui.dp(10), ui.dp(12), ui.dp(10));
+        box.setPadding(ui.dp(9), ui.dp(5), ui.dp(9), ui.dp(5));
+        box.setMinimumWidth(ui.dp(78));
         box.setBackground(ui.rounded(Color.rgb(37, 47, 68), ui.dp(12)));
-        box.addView(ui.text(title, 12, Color.rgb(203, 213, 225), false), ui.matchWrap());
-        box.addView(ui.spacer(ui.dp(4)));
-        box.addView(ui.text(value, 13, Color.WHITE, true), ui.matchWrap());
+        box.addView(singleLineText(title, 10, Color.rgb(203, 213, 225), false), ui.matchWrap());
+        box.addView(ui.spacer(ui.dp(1)));
+        box.addView(singleLineText(value, 12, Color.WHITE, true), ui.matchWrap());
+        int changeColor = changePercent.startsWith("-") ? COLOR_FALL : changePercent.startsWith("+") ? COLOR_RISE : Color.rgb(203, 213, 225);
+        box.addView(singleLineText(changePercent, 11, changeColor, true), ui.matchWrap());
         return box;
+    }
+
+    private TextView singleLineText(String value, int sp, int color, boolean bold) {
+        TextView view = ui.text(value, sp, color, bold);
+        view.setSingleLine(true);
+        view.setIncludeFontPadding(false);
+        view.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        return view;
+    }
+
+    private TextView actionButton(String label, int bgColor, int textColor) {
+        TextView view = singleLineText(label, 13, textColor, true);
+        view.setGravity(Gravity.CENTER);
+        view.setBackground(ui.rounded(bgColor, ui.dp(10)));
+        view.setClickable(true);
+        view.setMinWidth(ui.dp(56));
+        return view;
     }
 
     private View buildGroupBar() {
@@ -189,7 +217,7 @@ public class HomePageBuilder {
             final String group = groups.get(i);
             TextView chip = ui.text(group, 14, selectedGroup.equals(group) ? Color.WHITE : COLOR_TEXT, true);
             chip.setGravity(Gravity.CENTER);
-            chip.setPadding(ui.dp(16), ui.dp(9), ui.dp(16), ui.dp(9));
+            chip.setPadding(ui.dp(12), ui.dp(6), ui.dp(12), ui.dp(6));
             chip.setBackground(ui.rounded(selectedGroup.equals(group) ? COLOR_ACCENT : COLOR_CARD, ui.dp(24)));
             chip.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -197,8 +225,8 @@ public class HomePageBuilder {
                     listener.onGroupSelected(group);
                 }
             });
-            row.addView(chip, ui.wrapHeight(ui.dp(40)));
-            row.addView(ui.spacer(ui.dp(8), ui.dp(1)));
+            row.addView(chip, ui.wrapHeight(ui.dp(32)));
+            row.addView(ui.spacer(ui.dp(6), ui.dp(1)));
         }
 
         scroll.addView(row, ui.wrapWrap());
@@ -208,7 +236,7 @@ public class HomePageBuilder {
     private View buildGroupHeader() {
         LinearLayout row = ui.horizontal();
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.addView(ui.text(context.getString(R.string.group_section_title), 18, COLOR_TEXT, true), ui.weightWrap(1));
+        row.addView(ui.text(context.getString(R.string.group_section_title), 16, COLOR_TEXT, true), ui.weightWrap(1));
         Button addGroup = ui.ghostButton(context.getString(R.string.add_group_button));
         addGroup.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -216,7 +244,7 @@ public class HomePageBuilder {
                 listener.onAddGroup();
             }
         });
-        row.addView(addGroup, ui.wrapHeight(ui.dp(40)));
+        row.addView(addGroup, ui.wrapHeight(ui.dp(34)));
         return row;
     }
 
@@ -225,68 +253,90 @@ public class HomePageBuilder {
         wrapper.setGravity(Gravity.CENTER_VERTICAL);
 
         final LinearLayout card = ui.card();
-        card.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                closeOpenActions(null);
-                listener.onStockSelected(stock);
-            }
-        });
+        card.setClickable(true);
         card.setOnTouchListener(new View.OnTouchListener() {
             private float downX;
             private float downY;
+            private boolean swiping;
+            private int startActionWidth;
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
+                LinearLayout actionRow = (LinearLayout) wrapper.getChildAt(1);
                 if (event.getAction() == MotionEvent.ACTION_DOWN) {
                     downX = event.getX();
                     downY = event.getY();
-                    return false;
+                    swiping = false;
+                    startActionWidth = actionRow.getLayoutParams().width;
+                    if (openActionRow != null && openActionRow != actionRow) {
+                        closeOpenActions(actionRow);
+                    }
+                    return true;
                 }
-                if (event.getAction() == MotionEvent.ACTION_UP) {
+                if (event.getAction() == MotionEvent.ACTION_MOVE) {
                     float dx = event.getX() - downX;
                     float dy = event.getY() - downY;
-                    if (dx < -ui.dp(44) && Math.abs(dx) > Math.abs(dy) * 1.4f) {
-                        openActions(wrapper);
+                    if (!swiping && Math.abs(dx) > touchSlop && Math.abs(dx) > Math.abs(dy) * 1.2f) {
+                        swiping = true;
+                        v.getParent().requestDisallowInterceptTouchEvent(true);
+                    }
+                    if (swiping) {
+                        int targetWidth = startActionWidth + (int) (-dx);
+                        setActionWidth(actionRow, clampActionWidth(targetWidth));
                         return true;
                     }
-                    if (dx > ui.dp(30)) {
+                }
+                if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                    float dx = event.getX() - downX;
+                    float dy = event.getY() - downY;
+                    v.getParent().requestDisallowInterceptTouchEvent(false);
+                    if (swiping) {
+                        int width = actionRow.getLayoutParams().width;
+                        if (width >= ui.dp(ACTION_TRIGGER_DP)) {
+                            openActions(wrapper);
+                        } else {
+                            closeOpenActions(null);
+                        }
+                        return true;
+                    }
+                    if (openActionRow == actionRow) {
                         closeOpenActions(null);
                         return true;
                     }
+                    if (Math.abs(dx) < touchSlop && Math.abs(dy) < touchSlop && event.getAction() == MotionEvent.ACTION_UP) {
+                        listener.onStockSelected(stock);
+                        return true;
+                    }
                 }
-                return false;
+                return true;
             }
         });
 
-        LinearLayout top = ui.horizontal();
-        top.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(ui.dp(12), ui.dp(9), ui.dp(12), ui.dp(9));
+
+        LinearLayout row = ui.horizontal();
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
         LinearLayout nameBox = ui.vertical();
-        nameBox.addView(ui.text(stock.name, 19, COLOR_TEXT, true), ui.matchWrap());
-        nameBox.addView(ui.text(context.getString(R.string.stock_meta_format, stock.code, stock.market, stock.industry), 12, COLOR_SUB, false), ui.matchWrap());
-        top.addView(nameBox, ui.weightWrap(1));
+        nameBox.addView(singleLineText(stock.name, 16, COLOR_TEXT, true), ui.matchWrap());
+        String meta = stock.code + " · " + stock.market + " · " + stock.groupName
+                + " · " + getNotes(stock.code).size() + "记";
+        TextView metaView = singleLineText(meta, 11, COLOR_SUB, false);
+        nameBox.addView(metaView, ui.matchWrap());
+        row.addView(nameBox, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
-        TextView change = ui.text(stock.changePercent, 17, stock.changePercent.startsWith("-") ? COLOR_FALL : COLOR_RISE, true);
+        LinearLayout quoteBox = ui.vertical();
+        quoteBox.setGravity(Gravity.RIGHT);
+        TextView price = singleLineText(stock.price, 16, COLOR_TEXT, true);
+        price.setGravity(Gravity.RIGHT);
+        quoteBox.addView(price, ui.matchWrap());
+        int changeColor = stock.changePercent.startsWith("-") ? COLOR_FALL : COLOR_RISE;
+        TextView change = singleLineText(stock.changePercent, 13, changeColor, true);
         change.setGravity(Gravity.RIGHT);
-        top.addView(change, ui.wrapWrap());
-        card.addView(top, ui.matchWrap());
-        card.addView(ui.spacer(ui.dp(14)));
+        quoteBox.addView(change, ui.matchWrap());
+        row.addView(quoteBox, new LinearLayout.LayoutParams(ui.dp(88), LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        LinearLayout bottom = ui.horizontal();
-        bottom.setGravity(Gravity.CENTER_VERTICAL);
-        bottom.addView(ui.tag(stock.groupName, COLOR_ACCENT_SOFT, COLOR_ACCENT), ui.wrapWrap());
-        bottom.addView(ui.spacer(ui.dp(8), ui.dp(1)));
-        bottom.addView(ui.text(context.getString(R.string.latest_price_format, stock.price), 13, COLOR_SUB, false), ui.weightWrap(1));
-        TextView noteCount = ui.text(context.getString(R.string.note_count_format, getNotes(stock.code).size()), 13, COLOR_SUB, false);
-        bottom.addView(noteCount, ui.wrapWrap());
-        card.addView(bottom, ui.matchWrap());
-
-        if (stock.remark.length() > 0) {
-            card.addView(ui.spacer(ui.dp(10)));
-            TextView remark = ui.text(stock.remark, 14, COLOR_TEXT, false);
-            remark.setLineSpacing(ui.dp(2), 1.0f);
-            card.addView(remark, ui.matchWrap());
-        }
+        card.addView(row, ui.matchWrap());
         wrapper.addView(card, ui.weightWrap(1));
         wrapper.addView(actionPanel(stock), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT));
         return wrapper;
@@ -295,10 +345,10 @@ public class HomePageBuilder {
     private View actionPanel(final Stock stock) {
         LinearLayout actions = ui.horizontal();
         actions.setGravity(Gravity.CENTER);
-        actions.setPadding(ui.dp(8), 0, 0, 0);
-        actions.setMinimumHeight(ui.dp(92));
-        Button edit = ui.ghostButton(context.getString(R.string.edit));
-        edit.setMinWidth(ui.dp(54));
+        actions.setPadding(ui.dp(6), 0, 0, 0);
+        actions.setMinimumHeight(ui.dp(58));
+
+        TextView edit = actionButton(context.getString(R.string.edit), COLOR_ACCENT, Color.WHITE);
         edit.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -306,9 +356,8 @@ public class HomePageBuilder {
                 listener.onEditStock(stock);
             }
         });
-        Button delete = ui.ghostButton(context.getString(R.string.delete));
-        delete.setMinWidth(ui.dp(54));
-        delete.setTextColor(Color.rgb(217, 45, 32));
+
+        TextView delete = actionButton(context.getString(R.string.delete), Color.rgb(217, 45, 32), Color.WHITE);
         delete.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -316,9 +365,9 @@ public class HomePageBuilder {
                 listener.onDeleteStock(stock);
             }
         });
-        actions.addView(edit, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT));
-        actions.addView(ui.spacer(ui.dp(6), 1));
-        actions.addView(delete, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT));
+        actions.addView(edit, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1));
+        actions.addView(ui.spacer(ui.dp(4), 1));
+        actions.addView(delete, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1));
         return actions;
     }
 
@@ -327,7 +376,7 @@ public class HomePageBuilder {
         if (openActionRow != null && openActionRow != actionRow) {
             setActionWidth(openActionRow, 0);
         }
-        setActionWidth(actionRow, LinearLayout.LayoutParams.WRAP_CONTENT);
+        setActionWidth(actionRow, ui.dp(ACTION_WIDTH_DP));
         openActionRow = actionRow;
     }
 
@@ -342,6 +391,10 @@ public class HomePageBuilder {
         LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) view.getLayoutParams();
         params.width = width;
         view.setLayoutParams(params);
+    }
+
+    private int clampActionWidth(int width) {
+        return Math.max(0, Math.min(ui.dp(ACTION_WIDTH_DP), width));
     }
 
     private ArrayList<DecisionNote> getNotes(String stockCode) {

@@ -2,6 +2,14 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { stream ->
+        localProperties.load(stream)
+    }
+}
+
 android {
     namespace 'com.face.mymoney'
     compileSdk {
@@ -18,9 +26,20 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    buildFeatures {
+        buildConfig true
+    }
+
     buildTypes {
+        debug {
+            buildConfigField "String", "DEEPSEEK_API_KEY", "\"${localProperties.getProperty("deepseek.apiKey", System.getenv("DEEPSEEK_API_KEY") ?: "")}\""
+            buildConfigField "String", "DEEPSEEK_MODEL", "\"${localProperties.getProperty("deepseek.model", "deepseek-v4-flash")}\""
+        }
         release {
-            minifyEnabled false
+            buildConfigField "String", "DEEPSEEK_API_KEY", "\"\""
+            buildConfigField "String", "DEEPSEEK_MODEL", "\"${localProperties.getProperty("deepseek.model", "deepseek-v4-flash")}\""
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }

@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class LocalStockRepository {
+    private static final String TAG = "MyMoneyStorage";
     private static final String PREF_NAME = "mymoney_mvp";
     private static final String KEY_STOCKS = "stocks";
     private static final String KEY_NOTES = "notes";
@@ -226,6 +227,7 @@ public class LocalStockRepository {
                 list.add(Stock.fromJson(array.getJSONObject(i)));
             }
         } catch (JSONException e) {
+            android.util.Log.w(TAG, "parseStocks failed: " + e.getMessage());
             list.clear();
         }
         return list;
@@ -239,6 +241,7 @@ public class LocalStockRepository {
                 list.add(DecisionNote.fromJson(array.getJSONObject(i)));
             }
         } catch (JSONException e) {
+            android.util.Log.w(TAG, "parseNotes failed: " + e.getMessage());
             list.clear();
         }
         return list;
@@ -255,6 +258,7 @@ public class LocalStockRepository {
                 }
             }
         } catch (JSONException e) {
+            android.util.Log.w(TAG, "parseStringArray failed: " + e.getMessage());
             list.clear();
         }
         return list;

@@ -5,6 +5,8 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -20,18 +22,25 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.OnApplyWindowInsetsListener;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.face.mymoney.R;
 import com.face.mymoney.auth.LocalAuthManager;
+import com.face.mymoney.ai.DeepSeekAnalysisResult;
+import com.face.mymoney.ai.DeepSeekStockAnalyzer;
 import com.face.mymoney.crawler.DebugCrawlerActivity;
+import com.face.mymoney.crawler.GeneralFinanceNewsFetcher;
+import com.face.mymoney.crawler.MarketIndexFetcher;
 import com.face.mymoney.crawler.StockNewsFetcher;
 import com.face.mymoney.crawler.StockQuoteFetcher;
 import com.face.mymoney.data.LocalStockRepository;
 import com.face.mymoney.model.DecisionNote;
+import com.face.mymoney.model.MarketIndexQuote;
 import com.face.mymoney.model.News;
 import com.face.mymoney.model.Stock;
 import com.face.mymoney.opinion.Opinion;
@@ -40,6 +49,7 @@ import com.face.mymoney.ui.MainUiKit;
 import com.face.mymoney.ui.detail.WinLossRatioCard;
 import com.face.mymoney.ui.home.HomePageBuilder;
 import com.face.mymoney.ui.login.LoginPageBuilder;
+import com.face.mymoney.ui.widget.PullRefreshScrollView;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -47,6 +57,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -58,26 +70,55 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAB_WATCHLIST = "watchlist";
     private static final String TAB_NEWS = "news";
     private static final String TAB_PROFILE = "profile";
+    private static final String NEWS_MODE_IMPORTANT = "important";
+    private static final String NEWS_MODE_SUBSCRIBED = "subscribed";
+    private static final long QUOTE_AUTO_REFRESH_MILLIS = 10000L;
 
     private LocalAuthManager authManager;
     private LocalStockRepository stockRepository;
     private FrameLayout root;
     private ArrayList<Stock> stocks = new ArrayList<Stock>();
     private ArrayList<DecisionNote> notes = new ArrayList<DecisionNote>();
+    private ArrayList<MarketIndexQuote> marketIndices = new ArrayList<MarketIndexQuote>();
+    private ArrayList<News> importantNewsCache = new ArrayList<News>();
     private HashMap<String, ArrayList<News>> newsCache = new HashMap<String, ArrayList<News>>();
     private HashMap<String, ArrayList<Opinion>> opinionCache = new HashMap<String, ArrayList<Opinion>>();
+    private HashMap<String, DeepSeekAnalysisResult> deepSeekAnalysisCache = new HashMap<String, DeepSeekAnalysisResult>();
     private HashSet<String> loadingNewsCodes = new HashSet<String>();
     private HashSet<String> loadingOpinionCodes = new HashSet<String>();
+    private HashSet<String> loadingDeepSeekCodes = new HashSet<String>();
+    private boolean loadingImportantNews;
+    private boolean loadingSubscribedNewsFeed;
+    private boolean importantNewsLoadedOnce;
+    private boolean subscribedNewsLoadedOnce;
+    private boolean refreshingQuotes;
     private HashMap<String, String> selectedNewsSources = new HashMap<String, String>();
     private HashMap<String, String> selectedOpinionSources = new HashMap<String, String>();
     private int pendingDetailScrollY = -1;
+    private int pendingWatchlistScrollY = -1;
+    private LinearLayout currentHeroContainer;
+    private LinearLayout currentCompanyContainer;
+    private LinearLayout currentWinLossContainer;
     private LinearLayout currentNewsContainer;
     private LinearLayout currentOpinionContainer;
+    private LinearLayout currentNoteContainer;
+    private PullRefreshScrollView currentNewsScrollView;
     private String currentTab = TAB_WATCHLIST;
+    private String selectedNewsMode = NEWS_MODE_IMPORTANT;
     private LinearLayout tabContent;
     private String selectedGroup = "";
     private Stock currentStock;
     private MainUiKit ui;
+    private OnBackPressedCallback detailBackCallback;
+    private final ExecutorService backgroundExecutor = Executors.newFixedThreadPool(3);
+    private final Handler quoteRefreshHandler = new Handler(Looper.getMainLooper());
+    private final Runnable quoteAutoRefreshRunnable = new Runnable() {
+        @Override
+        public void run() {
+            refreshQuotes(false);
+            scheduleQuoteAutoRefresh();
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,18 +139,62 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         stockRepository.removeSampleStocksOnce();
+        installBackHandler();
         loadData();
         showMainShell();
+        refreshQuotes(false);
+        scheduleQuoteAutoRefresh();
+    }
+
+    @Override
+    protected void onStop() {
+        quoteRefreshHandler.removeCallbacks(quoteAutoRefreshRunnable);
+        super.onStop();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        scheduleQuoteAutoRefresh();
+    }
+
+    @Override
+    protected void onDestroy() {
+        quoteRefreshHandler.removeCallbacks(quoteAutoRefreshRunnable);
+        backgroundExecutor.shutdownNow();
+        super.onDestroy();
     }
 
     @Override
     public void onBackPressed() {
         if (currentStock != null) {
-            currentStock = null;
-            showMainShell();
+            leaveStockDetail();
             return;
         }
         super.onBackPressed();
+    }
+
+    private void installBackHandler() {
+        detailBackCallback = new OnBackPressedCallback(false) {
+            @Override
+            public void handleOnBackPressed() {
+                leaveStockDetail();
+            }
+        };
+        getOnBackPressedDispatcher().addCallback(this, detailBackCallback);
+    }
+
+    private void setDetailBackEnabled(boolean enabled) {
+        if (detailBackCallback != null) {
+            detailBackCallback.setEnabled(enabled);
+        }
+    }
+
+    private void leaveStockDetail() {
+        currentStock = null;
+        setDetailBackEnabled(false);
+        currentTab = TAB_WATCHLIST;
+        showMainShell();
     }
 
     private boolean isLoggedIn() {
@@ -118,6 +203,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showLogin() {
         currentStock = null;
+        setDetailBackEnabled(false);
         root.removeAllViews();
         LoginPageBuilder builder = new LoginPageBuilder(this, ui, new LoginPageBuilder.Listener() {
             @Override
@@ -134,6 +220,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showMainShell() {
         currentStock = null;
+        setDetailBackEnabled(false);
         root.removeAllViews();
         LinearLayout shell = vertical();
         shell.setBackgroundColor(Color.rgb(245, 247, 251));
@@ -150,16 +237,40 @@ public class MainActivity extends AppCompatActivity {
         }
         tabContent.removeAllViews();
         if (TAB_NEWS.equals(currentTab)) {
+            loadNewsFeedIfNeeded();
             tabContent.addView(buildNewsFeedPage(), matchMatch());
+            pendingWatchlistScrollY = -1;
         } else if (TAB_PROFILE.equals(currentTab)) {
             tabContent.addView(buildProfilePage(), matchMatch());
+            pendingWatchlistScrollY = -1;
         } else {
-            tabContent.addView(buildWatchlistPage(), matchMatch());
+            View watchlistPage = buildWatchlistPage();
+            tabContent.addView(watchlistPage, matchMatch());
+            if (watchlistPage instanceof ScrollView) {
+                restoreWatchlistScroll((ScrollView) watchlistPage);
+            }
         }
+    }
+
+    private void scheduleQuoteAutoRefresh() {
+        quoteRefreshHandler.removeCallbacks(quoteAutoRefreshRunnable);
+        quoteRefreshHandler.postDelayed(quoteAutoRefreshRunnable, QUOTE_AUTO_REFRESH_MILLIS);
+    }
+
+    private void runInBackground(Runnable runnable) {
+        backgroundExecutor.execute(runnable);
+    }
+
+    private void runOnUiIfAlive(Runnable runnable) {
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        runOnUiThread(runnable);
     }
 
     private void showHome() {
         currentStock = null;
+        setDetailBackEnabled(false);
         root.removeAllViews();
         currentTab = TAB_WATCHLIST;
         showMainShell();
@@ -179,11 +290,6 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onRefreshQuotes() {
-                refreshQuotes();
-            }
-
-            @Override
             public void onGroupSelected(String group) {
                 selectedGroup = group;
                 showCurrentTab();
@@ -192,6 +298,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onStockSelected(Stock stock) {
                 currentStock = stock;
+                setDetailBackEnabled(true);
                 showStockDetail(stock);
             }
 
@@ -207,9 +314,11 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onDebugRequested() {
-                startActivity(new Intent(MainActivity.this, DebugCrawlerActivity.class));
+                if (BuildConfig.DEBUG) {
+                    startActivity(new Intent(MainActivity.this, DebugCrawlerActivity.class));
+                }
             }
-        }, authManager.getUserName(), stocks, displayStocks, notes, getGroups(), selectedGroup, countRiskStocks());
+        }, authManager.getUserName(), stocks, displayStocks, notes, marketIndices, getGroups(), selectedGroup, countRiskStocks());
         return builder.build();
     }
 
@@ -255,55 +364,118 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private View buildNewsFeedPage() {
-        ScrollView scrollView = new ScrollView(this);
-        LinearLayout page = vertical();
-        page.setPadding(dp(18), dp(16), dp(18), dp(24));
-        scrollView.addView(page, pageParams(false));
+        LinearLayout rootPage = vertical();
+        rootPage.setBackgroundColor(Color.rgb(245, 247, 251));
+
+        LinearLayout fixedTop = vertical();
+        fixedTop.setPadding(dp(18), dp(16), dp(18), dp(10));
+        fixedTop.setBackgroundColor(Color.rgb(245, 247, 251));
+
+        boolean importantMode = NEWS_MODE_IMPORTANT.equals(selectedNewsMode);
+        ArrayList<News> feedNews = importantMode ? importantNewsCache : buildSubscribedNews();
+        ArrayList<String> sources = getNewsSources(feedNews);
+        String feedKey = importantMode ? "important" : "feed";
+        String selectedSource = selectedNewsSources.get(feedKey);
+        if (sources.size() > 0 && (selectedSource == null || !sources.contains(selectedSource))) {
+            selectedSource = sources.get(0);
+            selectedNewsSources.put(feedKey, selectedSource);
+        }
 
         LinearLayout header = horizontal();
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.addView(text(getString(R.string.news_feed_title), 28, COLOR_TEXT, true), weightWrap(1));
-        Button refresh = primaryButton(getString(R.string.news_feed_refresh));
-        refresh.setOnClickListener(new View.OnClickListener() {
+        fixedTop.addView(header, matchWrap());
+        fixedTop.addView(spacer(10));
+        fixedTop.addView(newsModeSwitchBar(), matchWrap());
+        if (sources.size() > 0) {
+            fixedTop.addView(spacer(8));
+            fixedTop.addView(compactSourceBarForFeed(sources, selectedSource, feedKey), matchWrap());
+            fixedTop.addView(spacer(6));
+            fixedTop.addView(text(selectedSource + " · " + getNewsBySource(feedNews, selectedSource).size() + " 条", 12, COLOR_SUB, false), matchWrap());
+        }
+        rootPage.addView(fixedTop, matchWrap());
+
+        PullRefreshScrollView scrollView = new PullRefreshScrollView(this);
+        currentNewsScrollView = scrollView;
+        LinearLayout page = vertical();
+        page.setPadding(dp(18), dp(4), dp(18), dp(24));
+        scrollView.addView(page, pageParams(false));
+        TextView pullRefresh = text("下拉刷新", 13, COLOR_SUB, false);
+        pullRefresh.setGravity(Gravity.CENTER);
+        pullRefresh.setBackground(rounded(Color.WHITE, dp(12)));
+        page.addView(pullRefresh, new LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, 0));
+        scrollView.setPullRefresh(pullRefresh, dp(72), dp(88), new PullRefreshScrollView.Listener() {
             @Override
-            public void onClick(View v) {
-                refreshNewsFeed();
+            public void onRefresh() {
+                refreshNewsFeed(true);
             }
         });
-        header.addView(refresh, wrapHeight(dp(42)));
-        page.addView(header, matchWrap());
-        page.addView(spacer(14));
-
-        ArrayList<News> feedNews = buildSubscribedNews();
         if (feedNews.size() == 0) {
+            android.util.Log.d(TAG, "buildNewsFeedPage empty mode=" + selectedNewsMode
+                    + ", loadingImportant=" + loadingImportantNews
+                    + ", importantLoadedOnce=" + importantNewsLoadedOnce
+                    + ", loadingSubscribed=" + loadingSubscribedNewsFeed
+                    + ", importantCount=" + importantNewsCache.size()
+                    + ", subscribedCount=" + buildSubscribedNews().size());
             LinearLayout empty = card();
-            empty.addView(text(getString(R.string.news_feed_empty_title), 18, COLOR_TEXT, true), matchWrap());
+            boolean loading = importantMode
+                    ? (loadingImportantNews || (!importantNewsLoadedOnce && importantNewsCache.size() == 0))
+                    : (loadingSubscribedNewsFeed || (!subscribedNewsLoadedOnce && hasMissingSubscribedNews()));
+            String emptyTitle;
+            if (loading) {
+                emptyTitle = importantMode ? "正在加载重要财经" : "正在加载自选订阅";
+            } else {
+                emptyTitle = importantMode ? "暂无重要财经" : getString(R.string.news_feed_empty_title);
+            }
+            empty.addView(text(emptyTitle, 18, COLOR_TEXT, true), matchWrap());
             empty.addView(spacer(8));
-            empty.addView(text(getString(R.string.news_feed_empty_desc), 14, COLOR_SUB, false), matchWrap());
+            empty.addView(text(importantMode
+                    ? (loading ? "正在从东方财富、财联社、新浪财经和 Bing 国际新闻抓取。" : "多渠道暂未抓到重要财经，请稍后刷新。")
+                    : getString(R.string.news_feed_empty_desc), 14, COLOR_SUB, false), matchWrap());
             page.addView(empty, matchWrap());
-            return scrollView;
+            rootPage.addView(scrollView, new LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+            return rootPage;
         }
 
-        ArrayList<String> sources = getNewsSources(feedNews);
-        String selectedSource = selectedNewsSources.get("feed");
-        if (selectedSource == null || !sources.contains(selectedSource)) {
-            selectedSource = sources.get(0);
-            selectedNewsSources.put("feed", selectedSource);
-        }
-        page.addView(sourceSwitchBarForFeed(sources, selectedSource), matchWrap());
-        page.addView(spacer(10));
+        android.util.Log.d(TAG, "buildNewsFeedPage mode=" + selectedNewsMode
+                + ", feedCount=" + feedNews.size()
+                + ", sources=" + sources);
         ArrayList<News> sourceNews = getNewsBySource(feedNews, selectedSource);
-        page.addView(sourceHeader(selectedSource, sourceNews.size(), "条资讯"), matchWrap());
-        page.addView(spacer(8));
         int displayCount = Math.min(sourceNews.size(), 12);
         for (int i = 0; i < displayCount; i++) {
             page.addView(feedNewsRow(sourceNews.get(i)), matchWrap());
             page.addView(spacer(10));
         }
-        return scrollView;
+        rootPage.addView(scrollView, new LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        return rootPage;
     }
 
-    private View sourceSwitchBarForFeed(ArrayList<String> sources, String selectedSource) {
+    private View newsModeSwitchBar() {
+        LinearLayout row = horizontal();
+        row.setPadding(dp(3), dp(3), dp(3), dp(3));
+        row.setBackground(rounded(Color.WHITE, dp(14)));
+        row.addView(newsModeChip("重要财经", NEWS_MODE_IMPORTANT), weightWrap(1));
+        row.addView(newsModeChip("自选订阅", NEWS_MODE_SUBSCRIBED), weightWrap(1));
+        return row;
+    }
+
+    private TextView newsModeChip(String label, final String mode) {
+        boolean selected = selectedNewsMode.equals(mode);
+        TextView chip = text(label, 13, selected ? Color.WHITE : COLOR_TEXT, true);
+        chip.setGravity(Gravity.CENTER);
+        chip.setPadding(dp(10), dp(8), dp(10), dp(8));
+        chip.setBackground(rounded(selected ? COLOR_ACCENT : Color.TRANSPARENT, dp(12)));
+        chip.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                selectedNewsMode = mode;
+                showCurrentTab();
+            }
+        });
+        return chip;
+    }
+
+    private View compactSourceBarForFeed(ArrayList<String> sources, String selectedSource, final String feedKey) {
         final android.widget.HorizontalScrollView scroll = new android.widget.HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);
         LinearLayout row = horizontal();
@@ -312,22 +484,53 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < sources.size(); i++) {
             final String source = sources.get(i);
             boolean selected = selectedSource.equals(source);
-            TextView chip = text(source, 13, selected ? Color.WHITE : COLOR_TEXT, true);
+            TextView chip = text(source, 12, selected ? COLOR_ACCENT : COLOR_SUB, true);
             chip.setGravity(Gravity.CENTER);
-            chip.setPadding(dp(14), dp(8), dp(14), dp(8));
-            chip.setBackground(rounded(selected ? COLOR_ACCENT : Color.WHITE, dp(22)));
+            chip.setPadding(dp(10), dp(6), dp(10), dp(6));
+            chip.setBackground(rounded(selected ? COLOR_ACCENT_SOFT : Color.TRANSPARENT, dp(14)));
             chip.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    selectedNewsSources.put("feed", source);
+                    selectedNewsSources.put(feedKey, source);
                     showCurrentTab();
                 }
             });
             if (selected) {
                 selectedChip[0] = chip;
             }
-            row.addView(chip, wrapHeight(dp(38)));
-            row.addView(spacer(8, 1));
+            row.addView(chip, wrapHeight(dp(32)));
+            row.addView(spacer(6, 1));
+        }
+        scroll.addView(row, wrapWrap());
+        scrollSelectedSourceIntoView(scroll, selectedChip[0]);
+        return scroll;
+    }
+
+    private View sourceSwitchBarForFeed(ArrayList<String> sources, String selectedSource, final String feedKey) {
+        final android.widget.HorizontalScrollView scroll = new android.widget.HorizontalScrollView(this);
+        scroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout row = horizontal();
+        row.setPadding(0, 0, dp(4), 0);
+        final View[] selectedChip = new View[1];
+        for (int i = 0; i < sources.size(); i++) {
+            final String source = sources.get(i);
+            boolean selected = selectedSource.equals(source);
+            TextView chip = text(source, 12, selected ? Color.WHITE : COLOR_TEXT, true);
+            chip.setGravity(Gravity.CENTER);
+            chip.setPadding(dp(10), dp(6), dp(10), dp(6));
+            chip.setBackground(rounded(selected ? COLOR_ACCENT : Color.WHITE, dp(22)));
+            chip.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    selectedNewsSources.put(feedKey, source);
+                    showCurrentTab();
+                }
+            });
+            if (selected) {
+                selectedChip[0] = chip;
+            }
+            row.addView(chip, wrapHeight(dp(32)));
+            row.addView(spacer(6, 1));
         }
         scroll.addView(row, wrapWrap());
         scrollSelectedSourceIntoView(scroll, selectedChip[0]);
@@ -336,9 +539,11 @@ public class MainActivity extends AppCompatActivity {
 
     private View feedNewsRow(final News item) {
         LinearLayout row = card();
-        row.setPadding(dp(16), dp(14), dp(16), dp(14));
-        row.addView(text(item.title, 16, COLOR_TEXT, true), matchWrap());
-        row.addView(spacer(5));
+        row.setPadding(dp(14), dp(12), dp(14), dp(12));
+        TextView title = text(item.title, 15, COLOR_TEXT, true);
+        title.setLineSpacing(dp(2), 1.0f);
+        row.addView(title, matchWrap());
+        row.addView(spacer(4));
         row.addView(text(getString(R.string.news_meta_format, item.source, item.time, item.keyword), 12, COLOR_SUB, false), matchWrap());
         row.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -517,29 +722,45 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showStockDetail(final Stock stock) {
+        currentStock = stock;
+        setDetailBackEnabled(true);
         android.util.Log.d(TAG, "showStockDetail code=" + stock.code
                 + ", name=" + stock.name
                 + ", cachedNews=" + (newsCache.get(stock.code) == null ? "null" : newsCache.get(stock.code).size())
                 + ", loading=" + loadingNewsCodes.contains(stock.code));
         root.removeAllViews();
 
+        LinearLayout detailShell = new LinearLayout(this);
+        detailShell.setOrientation(LinearLayout.VERTICAL);
+        detailShell.setBackgroundColor(Color.rgb(245, 247, 251));
         final ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
         LinearLayout page = vertical();
-        page.setPadding(dp(18), dp(16), dp(18), dp(28));
+        page.setPadding(dp(14), dp(10), dp(14), dp(22));
         scrollView.addView(page, pageParams(true));
 
         LinearLayout nav = horizontal();
         nav.setGravity(Gravity.CENTER_VERTICAL);
+        nav.setPadding(dp(14), dp(8), dp(14), dp(8));
+        nav.setBackgroundColor(Color.rgb(245, 247, 251));
         Button back = ghostButton(getString(R.string.back));
         back.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                currentStock = null;
-                showHome();
+                leaveStockDetail();
             }
         });
-        nav.addView(back, wrapHeight(dp(42)));
-        nav.addView(spaceWeight(), weightWrap(1));
+        nav.addView(back, wrapHeight(dp(36)));
+        nav.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
+        Button addTopNote = primaryButton(getString(R.string.add_note_button));
+        addTopNote.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showAddNoteDialog(stock);
+            }
+        });
+        nav.addView(addTopNote, wrapHeight(dp(36)));
+        nav.addView(spacer(8, 1));
         Button delete = ghostButton(getString(R.string.delete));
         delete.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -547,42 +768,34 @@ public class MainActivity extends AppCompatActivity {
                 confirmDeleteStock(stock);
             }
         });
-        nav.addView(delete, wrapHeight(dp(42)));
-        page.addView(nav, matchWrap());
-        page.addView(spacer(8));
+        nav.addView(delete, wrapHeight(dp(36)));
+        currentHeroContainer = vertical();
+        currentHeroContainer.addView(heroCard(stock), matchWrap());
+        page.addView(currentHeroContainer, matchWrap());
+        page.addView(spacer(10));
 
-        LinearLayout hero = card();
-        hero.setBackground(rounded(COLOR_TEXT, dp(18)));
-        hero.addView(text(stock.name + "  " + stock.code, 25, Color.WHITE, true), matchWrap());
-        hero.addView(spacer(6));
-        hero.addView(text(stock.industry + " · " + stock.market + " · " + stock.groupName, 13, Color.rgb(203, 213, 225), false), matchWrap());
-        hero.addView(spacer(18));
-        LinearLayout quote = horizontal();
-        quote.addView(quoteItem(getString(R.string.quote_latest_price), stock.price, Color.WHITE), weightWrap(1));
-        quote.addView(quoteItem(getString(R.string.quote_change_percent), stock.changePercent, stock.changePercent.startsWith("-") ? Color.rgb(96, 211, 148) : Color.rgb(255, 138, 128)), weightWrap(1));
-        quote.addView(quoteItem(getString(R.string.quote_turnover), stock.turnover, Color.WHITE), weightWrap(1));
-        hero.addView(quote, matchWrap());
-        page.addView(hero, matchWrap());
-        page.addView(spacer(14));
-
-        page.addView(WinLossRatioCard.create(this, stock, getNotes(stock.code)), matchWrap());
-        page.addView(spacer(14));
+        currentWinLossContainer = vertical();
+        currentWinLossContainer.addView(winLossRatioCard(stock), matchWrap());
+        page.addView(currentWinLossContainer, matchWrap());
+        page.addView(spacer(10));
 
         page.addView(sectionTitle(getString(R.string.company_info)), matchWrap());
-        page.addView(companyCard(stock), matchWrap());
-        page.addView(spacer(14));
+        currentCompanyContainer = vertical();
+        currentCompanyContainer.addView(companyCard(stock), matchWrap());
+        page.addView(currentCompanyContainer, matchWrap());
+        page.addView(spacer(10));
 
         page.addView(sectionTitle(getString(R.string.news_section)), matchWrap());
         currentNewsContainer = vertical();
         currentNewsContainer.addView(newsList(stock), matchWrap());
         page.addView(currentNewsContainer, matchWrap());
-        page.addView(spacer(14));
+        page.addView(spacer(10));
 
         page.addView(sectionTitle(getString(R.string.opinion_section)), matchWrap());
         currentOpinionContainer = vertical();
         currentOpinionContainer.addView(opinionList(stock), matchWrap());
         page.addView(currentOpinionContainer, matchWrap());
-        page.addView(spacer(14));
+        page.addView(spacer(10));
 
         LinearLayout noteHeader = horizontal();
         noteHeader.setGravity(Gravity.CENTER_VERTICAL);
@@ -594,12 +807,20 @@ public class MainActivity extends AppCompatActivity {
                 showAddNoteDialog(stock);
             }
         });
-        noteHeader.addView(addNote, wrapHeight(dp(42)));
+        noteHeader.addView(addNote, wrapHeight(dp(36)));
         page.addView(noteHeader, matchWrap());
-        page.addView(noteList(stock), matchWrap());
+        currentNoteContainer = vertical();
+        currentNoteContainer.addView(noteList(stock), matchWrap());
+        page.addView(currentNoteContainer, matchWrap());
 
-        root.addView(scrollView, matchMatch());
+        detailShell.addView(nav, matchWrap());
+        detailShell.addView(scrollView, new LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1));
+        root.addView(detailShell, matchMatch());
         restoreDetailScroll(scrollView);
+        loadDeepSeekAnalysisIfReady(stock);
     }
 
     private View quoteItem(String label, String value, int valueColor) {
@@ -610,14 +831,94 @@ public class MainActivity extends AppCompatActivity {
         return box;
     }
 
+    private View heroCard(Stock stock) {
+        LinearLayout hero = card();
+        hero.setPadding(dp(14), dp(12), dp(14), dp(12));
+        hero.setBackground(rounded(COLOR_TEXT, dp(16)));
+
+        LinearLayout top = horizontal();
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout titleBox = vertical();
+        titleBox.addView(singleLineText(stock.name, 22, Color.WHITE, true), matchWrap());
+        titleBox.addView(spacer(3));
+        titleBox.addView(singleLineText(stock.code + " · " + stock.market + " · " + stock.groupName,
+                12, Color.rgb(203, 213, 225), false), matchWrap());
+        top.addView(titleBox, weightWrap(1));
+
+        LinearLayout priceBox = vertical();
+        priceBox.setGravity(Gravity.RIGHT);
+        TextView price = singleLineText(stock.price, 22, Color.WHITE, true);
+        price.setGravity(Gravity.RIGHT);
+        priceBox.addView(price, matchWrap());
+        int changeColor = stock.changePercent.startsWith("-") ? Color.rgb(96, 211, 148) : Color.rgb(255, 138, 128);
+        TextView change = singleLineText(stock.changePercent, 14, changeColor, true);
+        change.setGravity(Gravity.RIGHT);
+        priceBox.addView(change, matchWrap());
+        top.addView(priceBox, new LinearLayout.LayoutParams(dp(110), android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
+        hero.addView(top, matchWrap());
+
+        hero.addView(spacer(8));
+        LinearLayout sub = horizontal();
+        sub.addView(text(getString(R.string.quote_turnover) + " " + stock.turnover, 12, Color.rgb(203, 213, 225), false), weightWrap(1));
+        sub.addView(text(stock.industry, 12, Color.rgb(203, 213, 225), false), wrapWrap());
+        hero.addView(sub, matchWrap());
+        return hero;
+    }
+
+    private TextView singleLineText(String value, int sp, int color, boolean bold) {
+        TextView view = text(value, sp, color, bold);
+        view.setSingleLine(true);
+        view.setIncludeFontPadding(false);
+        view.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        return view;
+    }
+
+    private View winLossRatioCard(Stock stock) {
+        return WinLossRatioCard.create(this, stock, getNotes(stock.code),
+                deepSeekAnalysisCache.get(stock.code), loadingDeepSeekCodes.contains(stock.code),
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        showDeepSeekAnalysisDialog(stock);
+                    }
+                });
+    }
+
+    private void refreshWinLossRatioCard(Stock stock) {
+        if (currentWinLossContainer == null) {
+            return;
+        }
+        currentWinLossContainer.removeAllViews();
+        currentWinLossContainer.addView(winLossRatioCard(stock), matchWrap());
+    }
+
     private View companyCard(Stock stock) {
         LinearLayout card = card();
+        card.setPadding(dp(14), dp(12), dp(14), dp(12));
+        LinearLayout row1 = horizontal();
+        row1.addView(compactInfo(getString(R.string.market_value), stock.marketValue), weightWrap(1));
+        row1.addView(spacer(8, 1));
+        row1.addView(compactInfo(getString(R.string.pe_label), stock.pe), weightWrap(1));
+        card.addView(row1, matchWrap());
+        card.addView(spacer(8));
+        LinearLayout row2 = horizontal();
+        row2.addView(compactInfo(getString(R.string.revenue_profit), stock.revenue + " / " + stock.profit), weightWrap(1));
+        row2.addView(spacer(8, 1));
+        row2.addView(compactInfo(getString(R.string.risk_tag), stock.riskTag), weightWrap(1));
+        card.addView(row2, matchWrap());
+        card.addView(spacer(8));
         card.addView(infoRow(getString(R.string.main_business), stock.mainBusiness), matchWrap());
-        card.addView(infoRow(getString(R.string.market_value), stock.marketValue), matchWrap());
-        card.addView(infoRow(getString(R.string.pe_label), stock.pe), matchWrap());
-        card.addView(infoRow(getString(R.string.revenue_profit), stock.revenue + " / " + stock.profit), matchWrap());
-        card.addView(infoRow(getString(R.string.risk_tag), stock.riskTag), matchWrap());
         return card;
+    }
+
+    private View compactInfo(String label, String value) {
+        LinearLayout box = vertical();
+        box.setPadding(dp(10), dp(8), dp(10), dp(8));
+        box.setBackground(rounded(Color.rgb(248, 250, 252), dp(10)));
+        box.addView(singleLineText(label, 11, COLOR_SUB, false), matchWrap());
+        box.addView(spacer(3));
+        box.addView(singleLineText(value, 13, COLOR_TEXT, true), matchWrap());
+        return box;
     }
 
     private View newsList(final Stock stock) {
@@ -644,7 +945,7 @@ public class MainActivity extends AppCompatActivity {
             ArrayList<News> sourceNews = getNewsBySource(news, selectedSource);
             list.addView(sourceHeader(selectedSource, sourceNews.size(), "条资讯"), matchWrap());
             list.addView(spacer(8));
-            int displayCount = Math.min(sourceNews.size(), 6);
+            int displayCount = Math.min(sourceNews.size(), 8);
             for (int j = 0; j < displayCount; j++) {
                 list.addView(newsRow(stock, sourceNews.get(j)), matchWrap());
                 list.addView(spacer(10));
@@ -659,10 +960,10 @@ public class MainActivity extends AppCompatActivity {
 
     private View newsRow(final Stock stock, final News item) {
         LinearLayout row = card();
-        row.setPadding(dp(16), dp(14), dp(16), dp(14));
-        row.addView(text(item.title, 16, COLOR_TEXT, true), matchWrap());
-        row.addView(spacer(5));
-        row.addView(text(getString(R.string.news_meta_format, item.source, item.time, item.keyword), 12, COLOR_SUB, false), matchWrap());
+        row.setPadding(dp(12), dp(9), dp(12), dp(9));
+        row.addView(singleLineText(item.title, 14, COLOR_TEXT, true), matchWrap());
+        row.addView(spacer(4));
+        row.addView(singleLineText(item.source + " · " + item.time, 11, COLOR_SUB, false), matchWrap());
         row.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -687,22 +988,22 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < stockNotes.size(); i++) {
             DecisionNote note = stockNotes.get(i);
             LinearLayout card = card();
+            card.setPadding(dp(12), dp(10), dp(12), dp(10));
             LinearLayout top = horizontal();
             top.setGravity(Gravity.CENTER_VERTICAL);
             top.addView(tag(note.type, COLOR_ACCENT_SOFT, COLOR_ACCENT), wrapWrap());
             top.addView(spacer(8, 1));
-            top.addView(text(note.createdTime, 12, COLOR_SUB, false), wrapWrap());
+            top.addView(singleLineText(note.title, 15, COLOR_TEXT, true), weightWrap(1));
             card.addView(top, matchWrap());
-            card.addView(spacer(9));
-            card.addView(text(note.title, 17, COLOR_TEXT, true), matchWrap());
-            card.addView(spacer(6));
-            TextView content = text(note.content, 14, COLOR_TEXT, false);
-            content.setLineSpacing(dp(3), 1.0f);
-            card.addView(content, matchWrap());
-            card.addView(spacer(10));
-            card.addView(text(getString(R.string.note_meta_format, note.targetPrice, note.stopLossPrice, note.confidence), 12, COLOR_SUB, false), matchWrap());
+            card.addView(spacer(5));
+            card.addView(singleLineText(getString(R.string.note_meta_format, note.targetPrice, note.stopLossPrice, note.confidence)
+                    + " · " + note.createdTime, 12, COLOR_SUB, false), matchWrap());
+            if (note.content.length() > 0) {
+                card.addView(spacer(5));
+                card.addView(singleLineText(note.content, 13, COLOR_TEXT, false), matchWrap());
+            }
             list.addView(card, matchWrap());
-            list.addView(spacer(10));
+            list.addView(spacer(7));
         }
         return list;
     }
@@ -728,7 +1029,7 @@ public class MainActivity extends AppCompatActivity {
             ArrayList<Opinion> sourceOpinions = getOpinionsBySource(opinions, selectedSource);
             list.addView(sourceHeader(selectedSource, sourceOpinions.size(), "条观点"), matchWrap());
             list.addView(spacer(8));
-            int displayCount = Math.min(sourceOpinions.size(), 6);
+            int displayCount = Math.min(sourceOpinions.size(), 8);
             for (int j = 0; j < displayCount; j++) {
                 list.addView(opinionRow(stock, sourceOpinions.get(j)), matchWrap());
                 list.addView(spacer(10));
@@ -750,9 +1051,9 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < sources.size(); i++) {
             final String source = sources.get(i);
             boolean selected = selectedSource.equals(source);
-            TextView chip = text(source, 13, selected ? Color.WHITE : COLOR_TEXT, true);
+            TextView chip = text(source, 12, selected ? Color.WHITE : COLOR_TEXT, true);
             chip.setGravity(Gravity.CENTER);
-            chip.setPadding(dp(14), dp(8), dp(14), dp(8));
+            chip.setPadding(dp(10), dp(6), dp(10), dp(6));
             chip.setBackground(rounded(selected ? COLOR_ACCENT : Color.WHITE, dp(22)));
             chip.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -770,8 +1071,8 @@ public class MainActivity extends AppCompatActivity {
             if (selected) {
                 selectedChip[0] = chip;
             }
-            row.addView(chip, wrapHeight(dp(38)));
-            row.addView(spacer(8, 1));
+            row.addView(chip, wrapHeight(dp(32)));
+            row.addView(spacer(6, 1));
         }
         scroll.addView(row, wrapWrap());
         scrollSelectedSourceIntoView(scroll, selectedChip[0]);
@@ -803,6 +1104,14 @@ public class MainActivity extends AppCompatActivity {
             currentOpinionContainer.removeAllViews();
             currentOpinionContainer.addView(opinionList(stock), matchWrap());
         }
+    }
+
+    private void refreshNoteSection(Stock stock) {
+        if (currentNoteContainer == null) {
+            return;
+        }
+        currentNoteContainer.removeAllViews();
+        currentNoteContainer.addView(noteList(stock), matchWrap());
     }
 
     private String selectedNewsSource(Stock stock, ArrayList<String> sources) {
@@ -852,6 +1161,31 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void rememberWatchlistScroll() {
+        pendingWatchlistScrollY = -1;
+        if (tabContent == null || tabContent.getChildCount() == 0) {
+            return;
+        }
+        View child = tabContent.getChildAt(0);
+        if (child instanceof ScrollView) {
+            pendingWatchlistScrollY = ((ScrollView) child).getScrollY();
+        }
+    }
+
+    private void restoreWatchlistScroll(final ScrollView scrollView) {
+        if (pendingWatchlistScrollY < 0) {
+            return;
+        }
+        final int scrollY = pendingWatchlistScrollY;
+        pendingWatchlistScrollY = -1;
+        scrollView.post(new Runnable() {
+            @Override
+            public void run() {
+                scrollView.scrollTo(0, scrollY);
+            }
+        });
+    }
+
     private View sourceHeader(String source, int count, String suffix) {
         LinearLayout row = horizontal();
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -864,10 +1198,10 @@ public class MainActivity extends AppCompatActivity {
 
     private View opinionRow(final Stock stock, final Opinion item) {
             LinearLayout row = card();
-            row.setPadding(dp(16), dp(14), dp(16), dp(14));
-            row.addView(text(item.title, 16, COLOR_TEXT, true), matchWrap());
-            row.addView(spacer(5));
-            row.addView(text(getString(R.string.opinion_meta_format, item.source, item.time, item.keyword), 12, COLOR_SUB, false), matchWrap());
+            row.setPadding(dp(12), dp(9), dp(12), dp(9));
+            row.addView(singleLineText(item.title, 14, COLOR_TEXT, true), matchWrap());
+            row.addView(spacer(4));
+            row.addView(singleLineText(item.source + " · " + item.time, 11, COLOR_SUB, false), matchWrap());
             row.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
@@ -933,7 +1267,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private TextView sectionTitle(String title) {
-        return text(title, 20, COLOR_TEXT, true);
+        TextView view = text(title, 17, COLOR_TEXT, true);
+        view.setIncludeFontPadding(false);
+        return view;
     }
 
     private void showAddStockDialog() {
@@ -1129,9 +1465,12 @@ public class MainActivity extends AppCompatActivity {
                         note.confidence = textOrDefault(confidence, "5");
                         note.createdTime = now();
                         notes.add(0, note);
+                        deepSeekAnalysisCache.remove(stock.code);
                         saveNotes();
                         dialog.dismiss();
-                        showStockDetail(stock);
+                        refreshNoteSection(stock);
+                        refreshWinLossRatioCard(stock);
+                        loadDeepSeekAnalysisIfReady(stock);
                     }
                 });
             }
@@ -1149,9 +1488,20 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showFeedNewsDialog(News news) {
+        String content = news.content == null ? "" : news.content.trim();
+        android.util.Log.d(TAG, "showFeedNewsDialog title=" + news.title
+                + ", source=" + news.source
+                + ", contentLength=" + content.length()
+                + ", contentPreview=" + (content.length() > 120 ? content.substring(0, 120) : content));
+        if (content.length() == 0 || content.equals(news.title)) {
+            content = "摘要：" + news.title
+                    + "\n\n来源：" + news.source
+                    + "\n时间：" + news.time
+                    + "\n关键词：" + news.keyword;
+        }
         new AlertDialog.Builder(this)
                 .setTitle(news.title)
-                .setMessage(news.source + " · " + news.time + "\n\n" + news.content + "\n\n关键词：" + news.keyword)
+                .setMessage(news.source + " · " + news.time + "\n\n" + content + "\n\n关键词：" + news.keyword)
                 .setPositiveButton(getString(R.string.ok), null)
                 .show();
     }
@@ -1163,6 +1513,34 @@ public class MainActivity extends AppCompatActivity {
         }
         new AlertDialog.Builder(this)
                 .setTitle(opinion.title)
+                .setMessage(message)
+                .setPositiveButton(getString(R.string.ok), null)
+                .show();
+    }
+
+    private void showDeepSeekAnalysisDialog(Stock stock) {
+        if (stock == null) {
+            return;
+        }
+        DeepSeekAnalysisResult result = deepSeekAnalysisCache.get(stock.code);
+        String message;
+        if (result == null) {
+            message = loadingDeepSeekCodes.contains(stock.code)
+                    ? "DeepSeek 正在结合爬虫信息生成胜负比参考。"
+                    : "DeepSeek 胜负比参考尚未生成。";
+        } else if (result.success && result.hasRatio) {
+            message = "AI胜负比：" + result.ratioText
+                    + "\n含义：每承担 1 份风险，对应 " + result.ratioText + " 份机会。"
+                    + "\n机会：" + result.opportunityPercent + "%"
+                    + "\n风险：" + result.riskPercent + "%"
+                    + "\n\n依据：" + result.summary
+                    + "\n\n校验：饼图比例、机会/风险百分比和胜负比文字均来自这次 DeepSeek JSON 结果，且已通过 0-100、合计100 的校验。";
+        } else {
+            message = result.displayText()
+                    + "\n\n校验：DeepSeek 未给出可用比例或比例未通过校验，饼图保留目标价/止损价计算结果。";
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("DeepSeek 胜负比参考")
                 .setMessage(message)
                 .setPositiveButton(getString(R.string.ok), null)
                 .show();
@@ -1229,12 +1607,12 @@ public class MainActivity extends AppCompatActivity {
         }
         loadingNewsCodes.add(stock.code);
         android.util.Log.d(TAG, "loadStockNews start code=" + stock.code + ", name=" + stock.name);
-        new Thread(new Runnable() {
+        runInBackground(new Runnable() {
             @Override
             public void run() {
                 StockNewsFetcher fetcher = new StockNewsFetcher(MainActivity.this);
                 final ArrayList<News> fetchedNews = fetcher.fetchForStock(stock);
-                runOnUiThread(new Runnable() {
+                runOnUiIfAlive(new Runnable() {
                     @Override
                     public void run() {
                         loadingNewsCodes.remove(stock.code);
@@ -1243,21 +1621,109 @@ public class MainActivity extends AppCompatActivity {
                                 + ", fetchedCount=" + fetchedNews.size()
                                 + ", currentStock=" + (currentStock == null ? "null" : currentStock.code));
                         if (currentStock != null && stock.code.equals(currentStock.code)) {
-                            showStockDetail(currentStock);
+                            refreshSourceSection(currentStock, true);
+                            loadDeepSeekAnalysisIfReady(currentStock);
                         }
                     }
                 });
             }
-        }).start();
+        });
     }
 
     private void refreshNewsFeed() {
-        if (stocks.size() == 0) {
-            Toast.makeText(this, getString(R.string.news_feed_empty_title), Toast.LENGTH_SHORT).show();
+        refreshNewsFeed(true);
+    }
+
+    private void loadNewsFeedIfNeeded() {
+        if (!importantNewsLoadedOnce && importantNewsCache.size() == 0 && !loadingImportantNews) {
+            loadImportantNews(false);
+        }
+        if (!subscribedNewsLoadedOnce && !loadingSubscribedNewsFeed && hasMissingSubscribedNews()) {
+            loadSubscribedNews(false);
+        }
+    }
+
+    private void refreshNewsFeed(boolean manual) {
+        if (NEWS_MODE_SUBSCRIBED.equals(selectedNewsMode)) {
+            loadSubscribedNews(manual);
             return;
         }
-        Toast.makeText(this, getString(R.string.news_loading_title), Toast.LENGTH_SHORT).show();
-        new Thread(new Runnable() {
+        loadImportantNews(manual);
+    }
+
+    private void finishNewsPullRefreshIfNeeded() {
+        if (currentNewsScrollView != null && currentNewsScrollView.isRefreshing()) {
+            currentNewsScrollView.finishRefresh();
+        }
+    }
+
+    private void loadImportantNews(final boolean manual) {
+        if (loadingImportantNews) {
+            if (manual) {
+                Toast.makeText(this, "重要财经正在加载中", Toast.LENGTH_SHORT).show();
+            }
+            finishNewsPullRefreshIfNeeded();
+            return;
+        }
+        if (manual) {
+            importantNewsLoadedOnce = false;
+        }
+        loadingImportantNews = true;
+        android.util.Log.d(TAG, "loadImportantNews start manual=" + manual);
+        if (manual) {
+            Toast.makeText(this, getString(R.string.news_loading_title), Toast.LENGTH_SHORT).show();
+        }
+        runInBackground(new Runnable() {
+            @Override
+            public void run() {
+                GeneralFinanceNewsFetcher fetcher = new GeneralFinanceNewsFetcher();
+                final ArrayList<News> fetchedNews = fetcher.fetchImportantNews();
+                runOnUiIfAlive(new Runnable() {
+                    @Override
+                    public void run() {
+                        loadingImportantNews = false;
+                        importantNewsLoadedOnce = true;
+                        importantNewsCache = fetchedNews;
+                        android.util.Log.d(TAG, "loadImportantNews finish count=" + fetchedNews.size()
+                                + ", currentTab=" + currentTab
+                                + ", selectedMode=" + selectedNewsMode);
+                        if (TAB_NEWS.equals(currentTab)) {
+                            finishNewsPullRefreshIfNeeded();
+                            showCurrentTab();
+                        }
+                        if (manual) {
+                            Toast.makeText(MainActivity.this, "重要财经刷新完成：" + fetchedNews.size() + " 条", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    private void loadSubscribedNews(final boolean manual) {
+        if (stocks.size() == 0) {
+            if (manual) {
+                Toast.makeText(this, getString(R.string.news_feed_empty_title), Toast.LENGTH_SHORT).show();
+            }
+            finishNewsPullRefreshIfNeeded();
+            return;
+        }
+        if (loadingSubscribedNewsFeed) {
+            if (manual) {
+                Toast.makeText(this, "自选订阅正在加载中", Toast.LENGTH_SHORT).show();
+            }
+            finishNewsPullRefreshIfNeeded();
+            return;
+        }
+        if (manual) {
+            subscribedNewsLoadedOnce = false;
+        }
+        loadingSubscribedNewsFeed = true;
+        android.util.Log.d(TAG, "loadSubscribedNews start manual=" + manual + ", stockCount=" + stocks.size());
+        if (manual) {
+            Toast.makeText(this, getString(R.string.news_loading_title), Toast.LENGTH_SHORT).show();
+        }
+        runInBackground(new Runnable() {
             @Override
             public void run() {
                 final HashMap<String, ArrayList<News>> fetched = new HashMap<String, ArrayList<News>>();
@@ -1266,15 +1732,37 @@ public class MainActivity extends AppCompatActivity {
                     Stock stock = stocks.get(i);
                     fetched.put(stock.code, fetcher.fetchForStock(stock));
                 }
-                runOnUiThread(new Runnable() {
+                runOnUiIfAlive(new Runnable() {
                     @Override
                     public void run() {
+                        loadingSubscribedNewsFeed = false;
+                        subscribedNewsLoadedOnce = true;
                         newsCache.putAll(fetched);
-                        showCurrentTab();
+                        android.util.Log.d(TAG, "loadSubscribedNews finish fetchedStocks=" + fetched.size()
+                                + ", subscribedCount=" + buildSubscribedNews().size());
+                        if (TAB_NEWS.equals(currentTab)) {
+                            finishNewsPullRefreshIfNeeded();
+                            showCurrentTab();
+                        }
+                        if (manual) {
+                            Toast.makeText(MainActivity.this, "自选订阅刷新完成", Toast.LENGTH_SHORT).show();
+                        }
                     }
                 });
             }
-        }).start();
+        });
+    }
+
+    private boolean hasMissingSubscribedNews() {
+        if (stocks.size() == 0) {
+            return false;
+        }
+        for (int i = 0; i < stocks.size(); i++) {
+            if (newsCache.get(stocks.get(i).code) == null) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private ArrayList<News> buildSubscribedNews() {
@@ -1312,46 +1800,158 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         loadingOpinionCodes.add(stock.code);
-        new Thread(new Runnable() {
+        runInBackground(new Runnable() {
             @Override
             public void run() {
                 StockOpinionFetcher fetcher = new StockOpinionFetcher();
                 final ArrayList<Opinion> fetchedOpinions = fetcher.fetchForStock(stock);
-                runOnUiThread(new Runnable() {
+                runOnUiIfAlive(new Runnable() {
                     @Override
                     public void run() {
                         loadingOpinionCodes.remove(stock.code);
                         opinionCache.put(stock.code, fetchedOpinions);
                         if (currentStock != null && stock.code.equals(currentStock.code)) {
-                            showStockDetail(currentStock);
+                            refreshSourceSection(currentStock, false);
+                            loadDeepSeekAnalysisIfReady(currentStock);
                         }
                     }
                 });
             }
-        }).start();
+        });
     }
 
-    private void refreshQuotes() {
-        if (stocks.size() == 0) {
-            Toast.makeText(this, getString(R.string.refresh_quote_empty), Toast.LENGTH_SHORT).show();
+    private void loadDeepSeekAnalysisIfReady(final Stock stock) {
+        if (stock == null || deepSeekAnalysisCache.containsKey(stock.code) || loadingDeepSeekCodes.contains(stock.code)) {
             return;
         }
-        Toast.makeText(this, getString(R.string.refresh_quote_loading), Toast.LENGTH_SHORT).show();
-        new Thread(new Runnable() {
+        if (newsCache.get(stock.code) == null || opinionCache.get(stock.code) == null) {
+            return;
+        }
+        loadingDeepSeekCodes.add(stock.code);
+        refreshWinLossRatioCard(stock);
+        runInBackground(new Runnable() {
             @Override
             public void run() {
-                StockQuoteFetcher fetcher = new StockQuoteFetcher();
-                final int successCount = fetcher.refreshQuotes(stocks);
-                runOnUiThread(new Runnable() {
+                DeepSeekStockAnalyzer analyzer = new DeepSeekStockAnalyzer();
+                final DeepSeekAnalysisResult result = analyzer.analyze(stock,
+                        safeNewsForAnalysis(stock), buildOpinions(stock), getNotes(stock.code));
+                runOnUiIfAlive(new Runnable() {
                     @Override
                     public void run() {
-                        saveStocks();
-                        Toast.makeText(MainActivity.this, getString(R.string.refresh_quote_result, successCount, stocks.size()), Toast.LENGTH_SHORT).show();
-                        showHome();
+                        loadingDeepSeekCodes.remove(stock.code);
+                        deepSeekAnalysisCache.put(stock.code, result);
+                        if (currentStock != null && stock.code.equals(currentStock.code)) {
+                            refreshWinLossRatioCard(currentStock);
+                        }
                     }
                 });
             }
-        }).start();
+        });
+    }
+
+    private ArrayList<News> safeNewsForAnalysis(Stock stock) {
+        ArrayList<News> cachedNews = newsCache.get(stock.code);
+        return cachedNews == null ? new ArrayList<News>() : cachedNews;
+    }
+
+    private void refreshQuotes() {
+        refreshQuotes(true);
+    }
+
+    private void refreshQuotes(final boolean manual) {
+        if (stocks.size() == 0) {
+            if (manual) {
+                Toast.makeText(this, "正在刷新大盘指数，暂无自选股可刷新", Toast.LENGTH_SHORT).show();
+            }
+        }
+        if (refreshingQuotes) {
+            if (manual) {
+                Toast.makeText(this, "行情正在刷新中", Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
+        refreshingQuotes = true;
+        if (manual) {
+            Toast.makeText(this, getString(R.string.refresh_quote_loading), Toast.LENGTH_SHORT).show();
+        }
+        runInBackground(new Runnable() {
+            @Override
+            public void run() {
+                StockQuoteFetcher fetcher = new StockQuoteFetcher();
+                final StockQuoteFetcher.QuoteRefreshResult result = fetcher.refreshQuotesDetailed(stocks);
+                MarketIndexFetcher indexFetcher = new MarketIndexFetcher();
+                final ArrayList<MarketIndexQuote> fetchedIndices = indexFetcher.fetchDefaultIndices();
+                runOnUiIfAlive(new Runnable() {
+                    @Override
+                    public void run() {
+                        refreshingQuotes = false;
+                        if (fetchedIndices.size() > 0) {
+                            marketIndices = fetchedIndices;
+                        }
+                        saveStocks();
+                        if (manual) {
+                            String refreshMessage = result.totalCount > 0
+                                    ? getString(R.string.refresh_quote_result, result.successCount, result.totalCount)
+                                    : (fetchedIndices.size() > 0 ? "大盘指数已刷新" : "大盘指数刷新失败");
+                            Toast.makeText(MainActivity.this, refreshMessage, Toast.LENGTH_SHORT).show();
+                        }
+                        refreshVisibleQuoteUi(manual);
+                        if (result.failedItems.size() > 0) {
+                            if (manual) {
+                                showQuoteRefreshFailureDialog(result);
+                            } else {
+                                Toast.makeText(MainActivity.this, "自动刷新行情失败：" + result.failedItems.size() + "/" + result.totalCount, Toast.LENGTH_SHORT).show();
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    private void refreshVisibleQuoteUi(boolean manual) {
+        if (currentStock != null) {
+            refreshDetailQuoteSections(currentStock);
+            return;
+        }
+        if (manual && TAB_WATCHLIST.equals(currentTab)) {
+            rememberWatchlistScroll();
+            showCurrentTab();
+        }
+    }
+
+    private void refreshDetailQuoteSections(Stock stock) {
+        if (currentHeroContainer != null) {
+            currentHeroContainer.removeAllViews();
+            currentHeroContainer.addView(heroCard(stock), matchWrap());
+        }
+        if (currentCompanyContainer != null) {
+            currentCompanyContainer.removeAllViews();
+            currentCompanyContainer.addView(companyCard(stock), matchWrap());
+        }
+        refreshWinLossRatioCard(stock);
+    }
+
+    private void showQuoteRefreshFailureDialog(StockQuoteFetcher.QuoteRefreshResult result) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("当前行情主渠道：东方财富 push2\n");
+        builder.append("备用渠道：新浪行情 hq.sinajs\n\n");
+        builder.append("刷新成功：").append(result.successCount).append("/").append(result.totalCount).append("\n");
+        builder.append("失败明细：\n");
+        int maxCount = Math.min(result.failedItems.size(), 8);
+        for (int i = 0; i < maxCount; i++) {
+            StockQuoteFetcher.QuoteFailure item = result.failedItems.get(i);
+            builder.append("- ").append(item.name).append(" ").append(item.code)
+                    .append("：").append(item.reason).append("\n");
+        }
+        if (result.failedItems.size() > maxCount) {
+            builder.append("另有 ").append(result.failedItems.size() - maxCount).append(" 只失败，可查看日志 MyMoneyQuote。\n");
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("行情刷新失败")
+                .setMessage(builder.toString())
+                .setPositiveButton(getString(R.string.ok), null)
+                .show();
     }
 
     private ArrayList<Stock> filterStocks() {
