@@ -55,6 +55,8 @@
     <string name="quote_change_percent">涨跌幅</string>
     <string name="quote_turnover">换手率</string>
     <string name="company_info">公司信息</string>
+    <string name="stock_board">板块</string>
+    <string name="stock_theme">题材</string>
     <string name="news_section">新闻动态</string>
     <string name="opinion_section">市场观点</string>
     <string name="opinion_loading_title">正在查询市场观点</string>
@@ -108,6 +110,7 @@
     <string name="market_shenzhen">深市</string>
     <string name="pending_sync">待同步</string>
     <string name="pending_industry">待同步行业</string>
+    <string name="pending_theme">待同步题材</string>
     <string name="pending_company_info">待接入公司资料</string>
     <string name="pending_company_info_source">待接入 Tushare/AKShare 公司资料</string>
     <string name="pending_risk_tag">待补充风险标签</string>
@@ -158,6 +161,7 @@
     <string name="win_loss_normal">胜负比一般，建议继续确认基本面、新闻变化和自己的买入条件。</string>
     <string name="win_loss_weak">胜负比偏低，风险空间不占优，建议谨慎记录原因再决定。</string>
     <string name="win_loss_price_format">当前价 %1$s · 目标价 %2$s · 止损价 %3$s</string>
+    <string name="win_loss_opportunity_hint">机会提示：公司名称、行业、主营业务和新闻题材如不一致，先复核业务归属，不把题材热度直接当成机会。</string>
     <string name="win_loss_chart_opportunity">机会空间</string>
     <string name="win_loss_chart_risk">风险空间</string>
 </resources>

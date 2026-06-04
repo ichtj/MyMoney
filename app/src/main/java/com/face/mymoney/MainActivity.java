@@ -35,17 +35,26 @@ import com.face.mymoney.ai.DeepSeekAnalysisResult;
 import com.face.mymoney.ai.DeepSeekStockAnalyzer;
 import com.face.mymoney.crawler.DebugCrawlerActivity;
 import com.face.mymoney.crawler.GeneralFinanceNewsFetcher;
+import com.face.mymoney.crawler.HotStockCandidateFetcher;
 import com.face.mymoney.crawler.MarketIndexFetcher;
+import com.face.mymoney.crawler.StockBoardFetcher;
 import com.face.mymoney.crawler.StockNewsFetcher;
 import com.face.mymoney.crawler.StockQuoteFetcher;
+import com.face.mymoney.data.DetailCache;
+import com.face.mymoney.data.HotStockCandidateRepository;
 import com.face.mymoney.data.LocalStockRepository;
 import com.face.mymoney.model.DecisionNote;
+import com.face.mymoney.model.HotStockCandidate;
 import com.face.mymoney.model.MarketIndexQuote;
 import com.face.mymoney.model.News;
 import com.face.mymoney.model.Stock;
 import com.face.mymoney.opinion.Opinion;
 import com.face.mymoney.opinion.StockOpinionFetcher;
+import com.face.mymoney.ratio.WinLossRatioCalculator;
+import com.face.mymoney.ratio.WinLossRatioInput;
+import com.face.mymoney.ratio.WinLossRatioResult;
 import com.face.mymoney.ui.MainUiKit;
+import com.face.mymoney.ui.StockDisplayText;
 import com.face.mymoney.ui.detail.WinLossRatioCard;
 import com.face.mymoney.ui.home.HomePageBuilder;
 import com.face.mymoney.ui.login.LoginPageBuilder;
@@ -53,6 +62,7 @@ import com.face.mymoney.ui.widget.PullRefreshScrollView;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -63,39 +73,52 @@ import java.util.concurrent.Executors;
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MyMoneyMain";
+    private static final String BOARD_THEME_TAG = "MyMoneyBoardTheme";
     private static final int COLOR_TEXT = Color.rgb(23, 32, 51);
     private static final int COLOR_SUB = Color.rgb(107, 114, 128);
     private static final int COLOR_ACCENT = Color.rgb(37, 99, 235);
     private static final int COLOR_ACCENT_SOFT = Color.rgb(234, 241, 255);
     private static final String TAB_WATCHLIST = "watchlist";
     private static final String TAB_NEWS = "news";
+    private static final String TAB_HOT = "hot";
     private static final String TAB_PROFILE = "profile";
     private static final String NEWS_MODE_IMPORTANT = "important";
     private static final String NEWS_MODE_SUBSCRIBED = "subscribed";
     private static final long QUOTE_AUTO_REFRESH_MILLIS = 10000L;
+    private static final long QUOTE_AUTO_REFRESH_IDLE_MILLIS = 5 * 60 * 1000L;
+    private static final long DETAIL_CACHE_TTL_MILLIS = 15 * 60 * 1000L;
 
     private LocalAuthManager authManager;
     private LocalStockRepository stockRepository;
+    private HotStockCandidateRepository hotStockRepository;
     private FrameLayout root;
     private ArrayList<Stock> stocks = new ArrayList<Stock>();
     private ArrayList<DecisionNote> notes = new ArrayList<DecisionNote>();
     private ArrayList<MarketIndexQuote> marketIndices = new ArrayList<MarketIndexQuote>();
+    private ArrayList<HotStockCandidate> hotCandidates = new ArrayList<HotStockCandidate>();
     private ArrayList<News> importantNewsCache = new ArrayList<News>();
     private HashMap<String, ArrayList<News>> newsCache = new HashMap<String, ArrayList<News>>();
     private HashMap<String, ArrayList<Opinion>> opinionCache = new HashMap<String, ArrayList<Opinion>>();
     private HashMap<String, DeepSeekAnalysisResult> deepSeekAnalysisCache = new HashMap<String, DeepSeekAnalysisResult>();
+    private HashMap<String, Long> newsFetchedAtCache = new HashMap<String, Long>();
+    private HashMap<String, Long> opinionFetchedAtCache = new HashMap<String, Long>();
+    private HashMap<String, Long> analysisFetchedAtCache = new HashMap<String, Long>();
     private HashSet<String> loadingNewsCodes = new HashSet<String>();
     private HashSet<String> loadingOpinionCodes = new HashSet<String>();
     private HashSet<String> loadingDeepSeekCodes = new HashSet<String>();
+    private HashSet<String> loadingBoardCodes = new HashSet<String>();
     private boolean loadingImportantNews;
     private boolean loadingSubscribedNewsFeed;
     private boolean importantNewsLoadedOnce;
     private boolean subscribedNewsLoadedOnce;
     private boolean refreshingQuotes;
+    private boolean loadingHotCandidates;
+    private boolean homeEntryQuotesRefreshed;
     private HashMap<String, String> selectedNewsSources = new HashMap<String, String>();
     private HashMap<String, String> selectedOpinionSources = new HashMap<String, String>();
     private int pendingDetailScrollY = -1;
     private int pendingWatchlistScrollY = -1;
+    private int pendingHotScrollY = -1;
     private LinearLayout currentHeroContainer;
     private LinearLayout currentCompanyContainer;
     private LinearLayout currentWinLossContainer;
@@ -129,6 +152,7 @@ public class MainActivity extends AppCompatActivity {
         ui = new MainUiKit(this);
         authManager = new LocalAuthManager(this);
         stockRepository = new LocalStockRepository(this);
+        hotStockRepository = new HotStockCandidateRepository(this);
         selectedGroup = stockRepository.getAllGroup();
         ViewCompat.setOnApplyWindowInsetsListener(root, new OnApplyWindowInsetsListener() {
             @Override
@@ -142,7 +166,10 @@ public class MainActivity extends AppCompatActivity {
         installBackHandler();
         loadData();
         showMainShell();
-        refreshQuotes(false);
+        refreshQuotesOnHomeEntry();
+        if (hotCandidates.size() == 0) {
+            refreshHotCandidates(false);
+        }
         scheduleQuoteAutoRefresh();
     }
 
@@ -193,7 +220,6 @@ public class MainActivity extends AppCompatActivity {
     private void leaveStockDetail() {
         currentStock = null;
         setDetailBackEnabled(false);
-        currentTab = TAB_WATCHLIST;
         showMainShell();
     }
 
@@ -213,6 +239,7 @@ public class MainActivity extends AppCompatActivity {
                 loadData();
                 hideKeyboard(anchorView);
                 showHome();
+                refreshQuotesOnHomeEntry();
             }
         });
         root.addView(builder.build(), matchMatch());
@@ -240,6 +267,13 @@ public class MainActivity extends AppCompatActivity {
             loadNewsFeedIfNeeded();
             tabContent.addView(buildNewsFeedPage(), matchMatch());
             pendingWatchlistScrollY = -1;
+        } else if (TAB_HOT.equals(currentTab)) {
+            View hotPage = buildHotCandidatesPage();
+            tabContent.addView(hotPage, matchMatch());
+            if (hotPage instanceof ScrollView) {
+                restoreHotScroll((ScrollView) hotPage);
+            }
+            pendingWatchlistScrollY = -1;
         } else if (TAB_PROFILE.equals(currentTab)) {
             tabContent.addView(buildProfilePage(), matchMatch());
             pendingWatchlistScrollY = -1;
@@ -254,7 +288,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void scheduleQuoteAutoRefresh() {
         quoteRefreshHandler.removeCallbacks(quoteAutoRefreshRunnable);
-        quoteRefreshHandler.postDelayed(quoteAutoRefreshRunnable, QUOTE_AUTO_REFRESH_MILLIS);
+        long delay = shouldAutoRefreshQuotes()
+                ? QUOTE_AUTO_REFRESH_MILLIS
+                : QUOTE_AUTO_REFRESH_IDLE_MILLIS;
+        quoteRefreshHandler.postDelayed(quoteAutoRefreshRunnable, delay);
     }
 
     private void runInBackground(Runnable runnable) {
@@ -278,6 +315,10 @@ public class MainActivity extends AppCompatActivity {
 
     private View buildWatchlistPage() {
         ArrayList<Stock> displayStocks = filterStocks();
+        android.util.Log.d(BOARD_THEME_TAG, "watchlist build selectedGroup=" + selectedGroup
+                + ", displayCount=" + displayStocks.size()
+                + ", totalCount=" + stocks.size());
+        refreshMissingBoards(displayStocks);
         HomePageBuilder builder = new HomePageBuilder(this, ui, new HomePageBuilder.Listener() {
             @Override
             public void onAddStock() {
@@ -313,13 +354,60 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
+            public void onMoveStockTop(Stock stock) {
+                moveStockToEdge(stock, true);
+            }
+
+            @Override
+            public void onMoveStockBottom(Stock stock) {
+                moveStockToEdge(stock, false);
+            }
+            @Override
             public void onDebugRequested() {
                 if (BuildConfig.DEBUG) {
                     startActivity(new Intent(MainActivity.this, DebugCrawlerActivity.class));
                 }
             }
-        }, authManager.getUserName(), stocks, displayStocks, notes, marketIndices, getGroups(), selectedGroup, countRiskStocks());
+        }, authManager.getUserName(), stocks, displayStocks, notes,
+                buildWinLossOpportunityPercents(displayStocks), marketIndices,
+                getGroups(), selectedGroup, countRiskStocks());
         return builder.build();
+    }
+
+    private HashMap<String, Integer> buildWinLossOpportunityPercents(ArrayList<Stock> displayStocks) {
+        HashMap<String, Integer> result = new HashMap<String, Integer>();
+        if (displayStocks == null || displayStocks.size() == 0) {
+            return result;
+        }
+        WinLossRatioCalculator calculator = new WinLossRatioCalculator();
+        for (int i = 0; i < displayStocks.size(); i++) {
+            Stock stock = displayStocks.get(i);
+            DeepSeekAnalysisResult analysis = deepSeekAnalysisCache.get(stock.code);
+            Long fetchedAt = analysisFetchedAtCache.get(stock.code);
+            if (analysis == null || fetchedAt == null) {
+                DetailCache cache = stockRepository.loadDetailCache(stock.code);
+                analysis = cache.analysis;
+                fetchedAt = cache.analysisFetchedAt > 0L ? Long.valueOf(cache.analysisFetchedAt) : null;
+                if (analysis != null && fetchedAt != null && !isDetailCacheExpired(fetchedAt)) {
+                    deepSeekAnalysisCache.put(stock.code, analysis);
+                    analysisFetchedAtCache.put(stock.code, fetchedAt);
+                }
+            }
+            if (isValidWinLossAiReference(analysis, fetchedAt)) {
+                WinLossRatioResult ratio = calculator.calculate(
+                        new WinLossRatioInput(stock, getNotes(stock.code), analysis));
+                if (ratio.hasDisplayRatio()) {
+                    result.put(stock.code, Integer.valueOf(ratio.opportunityPercent));
+                }
+            }
+        }
+        return result;
+    }
+
+    private boolean isValidWinLossAiReference(DeepSeekAnalysisResult analysis, Long fetchedAt) {
+        return analysis != null
+                && analysis.success
+                && !isDetailCacheExpired(fetchedAt);
     }
 
     private View bottomTabs() {
@@ -330,6 +418,8 @@ public class MainActivity extends AppCompatActivity {
         tabs.addView(tabItem(getString(R.string.tab_watchlist), TAB_WATCHLIST, R.drawable.ic_tab_watchlist), weightWrap(1));
         tabs.addView(spacer(8, 1));
         tabs.addView(tabItem(getString(R.string.tab_news_feed), TAB_NEWS, R.drawable.ic_tab_news), weightWrap(1));
+        tabs.addView(spacer(8, 1));
+        tabs.addView(tabItem("Top50热股", TAB_HOT, R.drawable.ic_tab_watchlist), weightWrap(1));
         tabs.addView(spacer(8, 1));
         tabs.addView(tabItem(getString(R.string.tab_profile), TAB_PROFILE, R.drawable.ic_tab_profile), weightWrap(1));
         return tabs;
@@ -554,6 +644,131 @@ public class MainActivity extends AppCompatActivity {
         return row;
     }
 
+    private View buildHotCandidatesPage() {
+        ScrollView scrollView = new ScrollView(this);
+        LinearLayout page = vertical();
+        page.setPadding(dp(14), dp(14), dp(14), dp(22));
+        scrollView.addView(page, pageParams(false));
+
+        LinearLayout header = horizontal();
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout titleBox = vertical();
+        titleBox.addView(text("Top50 热股", 26, COLOR_TEXT, true), matchWrap());
+        String subtitle = loadingHotCandidates
+                ? "正在收集热度、资金、量价和4日趋势数据"
+                : "主板/创业板，排除688和50元以上，按热度、资金、活跃度和机会排序";
+        titleBox.addView(text(subtitle, 13, COLOR_SUB, false), matchWrap());
+        header.addView(titleBox, weightWrap(1));
+        Button refresh = ghostButton(loadingHotCandidates ? "刷新中" : "刷新");
+        refresh.setEnabled(!loadingHotCandidates);
+        refresh.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                refreshHotCandidates(true);
+            }
+        });
+        header.addView(refresh, wrapHeight(dp(36)));
+        page.addView(header, matchWrap());
+        page.addView(spacer(10));
+
+        LinearLayout tip = card();
+        tip.setPadding(dp(12), dp(10), dp(12), dp(10));
+        tip.addView(text("候选池仅用于复盘观察，不构成买卖建议。点击个股可进入详情页，使用现有新闻、观点和记录能力继续核验。", 13, COLOR_SUB, false), matchWrap());
+        page.addView(tip, matchWrap());
+        page.addView(spacer(10));
+
+        if (hotCandidates.size() == 0) {
+            LinearLayout empty = card();
+            empty.addView(text(loadingHotCandidates ? "正在生成候选池" : "暂无Top50热股数据", 18, COLOR_TEXT, true), matchWrap());
+            empty.addView(spacer(8));
+            empty.addView(text(loadingHotCandidates
+                    ? "首次刷新需要逐只补查近几日 K 线，请稍等。"
+                    : "点击刷新后，会自动收集热门、有资金流入、交易活跃且短线仍有观察机会的股票。", 14, COLOR_SUB, false), matchWrap());
+            page.addView(empty, matchWrap());
+            return scrollView;
+        }
+
+        for (int i = 0; i < hotCandidates.size(); i++) {
+            page.addView(hotCandidateCard(i + 1, hotCandidates.get(i)), matchWrap());
+            page.addView(spacer(8));
+        }
+        return scrollView;
+    }
+
+    private View hotCandidateCard(final int rank, final HotStockCandidate candidate) {
+        LinearLayout card = card();
+        card.setPadding(dp(12), dp(10), dp(12), dp(10));
+        card.setClickable(true);
+        card.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showStockDetail(stockFromHotCandidate(candidate));
+            }
+        });
+
+        LinearLayout top = horizontal();
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        TextView rankView = singleLineText(String.valueOf(rank), 13, COLOR_ACCENT, true);
+        rankView.setGravity(Gravity.CENTER);
+        rankView.setBackground(rounded(COLOR_ACCENT_SOFT, dp(10)));
+        top.addView(rankView, new LinearLayout.LayoutParams(dp(30), dp(30)));
+        top.addView(spacer(8, 1));
+
+        LinearLayout nameBox = vertical();
+        nameBox.addView(singleLineText(candidate.name, 17, COLOR_TEXT, true), matchWrap());
+        nameBox.addView(singleLineText(candidate.code + " · " + candidate.market, 12, COLOR_SUB, false), matchWrap());
+        nameBox.addView(spacer(5));
+        nameBox.addView(industryBadge(candidate.industry), wrapHeight(dp(26)));
+        top.addView(nameBox, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+
+        LinearLayout scoreBox = vertical();
+        scoreBox.setGravity(Gravity.RIGHT);
+        TextView score = singleLineText(candidate.totalScore + "分", 16, COLOR_ACCENT, true);
+        score.setGravity(Gravity.RIGHT);
+        scoreBox.addView(score, matchWrap());
+        int changeColor = candidate.changePercent.startsWith("-") ? Color.rgb(7, 148, 85) : Color.rgb(217, 45, 32);
+        TextView change = singleLineText(candidate.changePercent, 13, changeColor, true);
+        change.setGravity(Gravity.RIGHT);
+        scoreBox.addView(change, matchWrap());
+        top.addView(scoreBox, new LinearLayout.LayoutParams(dp(76), LinearLayout.LayoutParams.WRAP_CONTENT));
+        card.addView(top, matchWrap());
+
+        card.addView(spacer(8));
+        card.addView(text("4日涨幅 " + candidate.fourDayChangePercent + " · 活跃 " + candidate.activeDays4d + "/4天"
+                + " · 主力净流入 " + candidate.mainNetInflow + " · 成交额 " + candidate.amount, 13, COLOR_SUB, false), matchWrap());
+        card.addView(text("换手 " + candidate.turnoverRate + " · 量比 " + candidate.volumeRatio
+                + " · 4日均额 " + candidate.averageAmount4d, 13, COLOR_SUB, false), matchWrap());
+        card.addView(spacer(5));
+        card.addView(text(candidate.reason + " · 风险：" + candidate.riskTag, 12, COLOR_SUB, false), matchWrap());
+        card.addView(spacer(8));
+
+        LinearLayout actions = horizontal();
+        actions.setGravity(Gravity.CENTER_VERTICAL);
+        actions.addView(text("点击卡片查看详情", 12, COLOR_SUB, false), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        Button add = ghostButton(containsStockCode(candidate.code) ? "已自选" : "加入自选");
+        add.setEnabled(!containsStockCode(candidate.code));
+        add.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                addHotCandidateToWatchlist(candidate);
+            }
+        });
+        actions.addView(add, wrapHeight(dp(34)));
+        card.addView(actions, matchWrap());
+        return card;
+    }
+
+    private TextView industryBadge(String industry) {
+        String label = industry == null || industry.length() == 0 || "--".equals(industry)
+                ? "行业待识别"
+                : industry;
+        TextView badge = singleLineText(label, 12, COLOR_ACCENT, true);
+        badge.setGravity(Gravity.CENTER);
+        badge.setPadding(dp(9), dp(4), dp(9), dp(4));
+        badge.setBackground(rounded(COLOR_ACCENT_SOFT, dp(13)));
+        return badge;
+    }
+
     private View buildProfilePage() {
         ScrollView scrollView = new ScrollView(this);
         LinearLayout page = vertical();
@@ -724,6 +939,7 @@ public class MainActivity extends AppCompatActivity {
     private void showStockDetail(final Stock stock) {
         currentStock = stock;
         setDetailBackEnabled(true);
+        prepareDetailCache(stock);
         android.util.Log.d(TAG, "showStockDetail code=" + stock.code
                 + ", name=" + stock.name
                 + ", cachedNews=" + (newsCache.get(stock.code) == null ? "null" : newsCache.get(stock.code).size())
@@ -820,6 +1036,7 @@ public class MainActivity extends AppCompatActivity {
                 1));
         root.addView(detailShell, matchMatch());
         restoreDetailScroll(scrollView);
+        refreshExpiredDetailData(stock);
         loadDeepSeekAnalysisIfReady(stock);
     }
 
@@ -832,6 +1049,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private View heroCard(Stock stock) {
+        android.util.Log.d(BOARD_THEME_TAG, "detailHero " + StockDisplayText.debugSummary(this, stock, 14));
         LinearLayout hero = card();
         hero.setPadding(dp(14), dp(12), dp(14), dp(12));
         hero.setBackground(rounded(COLOR_TEXT, dp(16)));
@@ -860,7 +1078,7 @@ public class MainActivity extends AppCompatActivity {
         hero.addView(spacer(8));
         LinearLayout sub = horizontal();
         sub.addView(text(getString(R.string.quote_turnover) + " " + stock.turnover, 12, Color.rgb(203, 213, 225), false), weightWrap(1));
-        sub.addView(text(stock.industry, 12, Color.rgb(203, 213, 225), false), wrapWrap());
+        sub.addView(text(/*getString(R.string.stock_board) + " " + */stockBoardText(stock), 12, Color.rgb(203, 213, 225), false), wrapWrap());
         hero.addView(sub, matchWrap());
         return hero;
     }
@@ -893,6 +1111,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private View companyCard(Stock stock) {
+        android.util.Log.d(BOARD_THEME_TAG, "detailCompany " + StockDisplayText.debugSummary(this, stock, 14));
         LinearLayout card = card();
         card.setPadding(dp(14), dp(12), dp(14), dp(12));
         LinearLayout row1 = horizontal();
@@ -907,6 +1126,10 @@ public class MainActivity extends AppCompatActivity {
         row2.addView(compactInfo(getString(R.string.risk_tag), stock.riskTag), weightWrap(1));
         card.addView(row2, matchWrap());
         card.addView(spacer(8));
+        LinearLayout row3 = horizontal();
+        row3.addView(compactInfo(getString(R.string.stock_board), stockBoardText(stock)), matchWrap());
+        card.addView(row3, matchWrap());
+        card.addView(spacer(8));
         card.addView(infoRow(getString(R.string.main_business), stock.mainBusiness), matchWrap());
         return card;
     }
@@ -919,6 +1142,10 @@ public class MainActivity extends AppCompatActivity {
         box.addView(spacer(3));
         box.addView(singleLineText(value, 13, COLOR_TEXT, true), matchWrap());
         return box;
+    }
+
+    private String stockBoardText(Stock stock) {
+        return StockDisplayText.board(this, stock);
     }
 
     private View newsList(final Stock stock) {
@@ -1186,6 +1413,31 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void rememberHotScroll() {
+        pendingHotScrollY = -1;
+        if (tabContent == null || tabContent.getChildCount() == 0) {
+            return;
+        }
+        View child = tabContent.getChildAt(0);
+        if (child instanceof ScrollView) {
+            pendingHotScrollY = ((ScrollView) child).getScrollY();
+        }
+    }
+
+    private void restoreHotScroll(final ScrollView scrollView) {
+        if (pendingHotScrollY < 0) {
+            return;
+        }
+        final int scrollY = pendingHotScrollY;
+        pendingHotScrollY = -1;
+        scrollView.post(new Runnable() {
+            @Override
+            public void run() {
+                scrollView.scrollTo(0, scrollY);
+            }
+        });
+    }
+
     private View sourceHeader(String source, int count, String suffix) {
         LinearLayout row = horizontal();
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -1354,6 +1606,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                         String groupText = resolveStockGroup(groupSpinner, newGroup);
                         stockRepository.saveGroupIfNeeded(groupText);
+                        Stock createdStock = null;
                         if (isEdit) {
                             editingStock.name = nameText;
                             editingStock.groupName = groupText;
@@ -1361,11 +1614,15 @@ public class MainActivity extends AppCompatActivity {
                         } else {
                             Stock stock = createDefaultStock(codeText, nameText, groupText, remark.getText().toString().trim());
                             stocks.add(0, stock);
+                            createdStock = stock;
                         }
                         saveStocks();
                         selectedGroup = groupText;
                         dialog.dismiss();
                         showCurrentTab();
+                        if (createdStock != null) {
+                            refreshManualStockBoardTheme(createdStock);
+                        }
                     }
                 });
             }
@@ -1465,7 +1722,7 @@ public class MainActivity extends AppCompatActivity {
                         note.confidence = textOrDefault(confidence, "5");
                         note.createdTime = now();
                         notes.add(0, note);
-                        deepSeekAnalysisCache.remove(stock.code);
+                        invalidateDetailAnalysis(stock.code);
                         saveNotes();
                         dialog.dismiss();
                         refreshNoteSection(stock);
@@ -1526,24 +1783,29 @@ public class MainActivity extends AppCompatActivity {
         String message;
         if (result == null) {
             message = loadingDeepSeekCodes.contains(stock.code)
-                    ? "DeepSeek 正在结合爬虫信息生成胜负比参考。"
-                    : "DeepSeek 胜负比参考尚未生成。";
-        } else if (result.success && result.hasRatio) {
-            message = "AI胜负比：" + result.ratioText
-                    + "\n含义：每承担 1 份风险，对应 " + result.ratioText + " 份机会。"
-                    + "\n机会：" + result.opportunityPercent + "%"
-                    + "\n风险：" + result.riskPercent + "%"
-                    + "\n\n依据：" + result.summary
-                    + "\n\n校验：饼图比例、机会/风险百分比和胜负比文字均来自这次 DeepSeek JSON 结果，且已通过 0-100、合计100 的校验。";
+                    ? "DeepSeek 正在为信息一致性、新闻情绪等分项生成结构化评分。"
+                    : "DeepSeek 分项分析尚未生成。";
+        } else if (result.success && result.hasUsableFactors()) {
+            message = result.displayText()
+                    + "\n\n校验：DeepSeek 只输出各 AI 分项分数；最终胜负比由本地价格计划和各分项按权重合成。";
         } else {
             message = result.displayText()
-                    + "\n\n校验：DeepSeek 未给出可用比例或比例未通过校验，饼图保留目标价/止损价计算结果。";
+                    + "\n\n校验：DeepSeek 未给出通过校验的分项评分，最终胜负比不纳入 AI 分项。";
         }
-        new AlertDialog.Builder(this)
-                .setTitle("DeepSeek 胜负比参考")
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+                .setTitle("DeepSeek 分项分析")
                 .setMessage(message)
-                .setPositiveButton(getString(R.string.ok), null)
-                .show();
+                .setPositiveButton(getString(R.string.ok), null);
+        if (!loadingDeepSeekCodes.contains(stock.code) && !isUsableDeepSeekAnalysis(result)) {
+            builder.setNegativeButton("重新分析", new android.content.DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(android.content.DialogInterface dialog, int which) {
+                    invalidateDetailAnalysis(stock.code);
+                    loadDeepSeekAnalysisIfReady(stock);
+                }
+            });
+        }
+        builder.show();
     }
 
     private void confirmDeleteStock(final Stock stock) {
@@ -1567,9 +1829,186 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    private void moveStockToEdge(Stock stock, boolean toTop) {
+        if (stock == null || stock.code == null) {
+            return;
+        }
+        int index = -1;
+        for (int i = 0; i < stocks.size(); i++) {
+            if (stock.code.equals(stocks.get(i).code)) {
+                index = i;
+                break;
+            }
+        }
+        if (index < 0) {
+            return;
+        }
+        int targetIndex = toTop ? 0 : stocks.size() - 1;
+        if (index == targetIndex) {
+            Toast.makeText(this, stock.name + (toTop ? " 已在顶部" : " 已在底部"), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Stock moved = stocks.remove(index);
+        if (toTop) {
+            stocks.add(0, moved);
+        } else {
+            stocks.add(moved);
+        }
+        saveStocks();
+        rememberWatchlistScroll();
+        showCurrentTab();
+        Toast.makeText(this, moved.name + (toTop ? " 已置顶" : " 已置底"), Toast.LENGTH_SHORT).show();
+    }
+
+    private void refreshHotCandidates(final boolean manual) {
+        if (loadingHotCandidates) {
+            if (manual) {
+                Toast.makeText(this, "Top50热股正在刷新", Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
+        loadingHotCandidates = true;
+        if (manual) {
+            if (TAB_HOT.equals(currentTab) && currentStock == null) {
+                rememberHotScroll();
+            }
+            showCurrentTab();
+            Toast.makeText(this, "正在收集Top50热股", Toast.LENGTH_SHORT).show();
+        }
+        runInBackground(new Runnable() {
+            @Override
+            public void run() {
+                HotStockCandidateFetcher fetcher = new HotStockCandidateFetcher(MainActivity.this);
+                final ArrayList<HotStockCandidate> fetched = fetcher.fetchTop50HotStocks();
+                runOnUiIfAlive(new Runnable() {
+                    @Override
+                    public void run() {
+                        loadingHotCandidates = false;
+                        if (fetched.size() > 0) {
+                            hotCandidates = fetched;
+                            hotStockRepository.saveCandidates(hotCandidates);
+                            syncHotCandidateBoardsToStocks(hotCandidates);
+                        }
+                        if (TAB_HOT.equals(currentTab) && currentStock == null) {
+                            rememberHotScroll();
+                            showCurrentTab();
+                        }
+                        if (manual) {
+                            String message = fetched.size() > 0
+                                    ? "Top50热股刷新完成：" + fetched.size() + "只"
+                                    : "暂未抓到符合条件的热股";
+                            Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    private void addHotCandidateToWatchlist(HotStockCandidate candidate) {
+        if (candidate == null || candidate.code == null || candidate.code.length() == 0) {
+            return;
+        }
+        if (containsStockCode(candidate.code)) {
+            Toast.makeText(this, getString(R.string.stock_duplicate), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Stock stock = stockFromHotCandidate(candidate);
+        stocks.add(0, stock);
+        stockRepository.saveGroupIfNeeded(stock.groupName);
+        saveStocks();
+        Toast.makeText(this, "已加入自选：" + stock.name, Toast.LENGTH_SHORT).show();
+        rememberHotScroll();
+        showCurrentTab();
+    }
+
+    private Stock stockFromHotCandidate(HotStockCandidate candidate) {
+        Stock stock = createDefaultStock(candidate.code, candidate.name,
+                getString(R.string.group_candidate), "");
+        stock.market = candidate.market;
+        stock.price = candidate.price;
+        stock.changePercent = candidate.changePercent;
+        stock.turnover = candidate.turnoverRate;
+        stock.industry = candidate.industry;
+        stock.mainBusiness = "Top50热股候选：" + candidate.reason;
+        stock.marketValue = candidate.amount;
+        stock.pe = "量比 " + candidate.volumeRatio;
+        stock.revenue = "4日涨幅 " + candidate.fourDayChangePercent + "，活跃 " + candidate.activeDays4d + "/4天";
+        stock.profit = "评分 " + candidate.totalScore;
+        stock.riskTag = candidate.riskTag;
+        android.util.Log.d(BOARD_THEME_TAG, "fromHotCandidate " + StockDisplayText.debugSummary(this, stock, 14));
+        return stock;
+    }
+
+    private boolean usefulCandidateText(String value) {
+        if (value == null) {
+            return false;
+        }
+        String text = value.trim();
+        return text.length() > 0 && !"--".equals(text);
+    }
+
+    private void syncHotCandidateBoardsToStocks(ArrayList<HotStockCandidate> candidates) {
+        android.util.Log.d(BOARD_THEME_TAG, "syncHotBoard start candidateCount="
+                + (candidates == null ? 0 : candidates.size())
+                + ", stockCount=" + stocks.size());
+        if (candidates == null || candidates.size() == 0 || stocks.size() == 0) {
+            return;
+        }
+        boolean changed = false;
+        for (int i = 0; i < candidates.size(); i++) {
+            HotStockCandidate candidate = candidates.get(i);
+            if (candidate == null || !usefulCandidateText(candidate.industry)) {
+                if (candidate != null) {
+                    android.util.Log.d(BOARD_THEME_TAG, "syncHotBoard skip candidateNoIndustry code="
+                            + candidate.code + ", industry=" + candidate.industry);
+                }
+                continue;
+            }
+            Stock stock = findStock(candidate.code);
+            if (stock != null && !StockDisplayText.hasBoard(stock)) {
+                stock.industry = candidate.industry.trim();
+                changed = true;
+                android.util.Log.d(BOARD_THEME_TAG, "syncHotBoard code=" + stock.code
+                        + ", industry=" + stock.industry);
+            } else if (stock != null) {
+                android.util.Log.d(BOARD_THEME_TAG, "syncHotBoard skip stockAlreadyHasBoard code="
+                        + stock.code + ", stockIndustry=" + stock.industry
+                        + ", candidateIndustry=" + candidate.industry);
+            }
+        }
+        if (changed) {
+            saveStocks();
+            android.util.Log.d(BOARD_THEME_TAG, "syncHotBoard saved");
+            if (currentStock == null && TAB_WATCHLIST.equals(currentTab)) {
+                rememberWatchlistScroll();
+                showCurrentTab();
+            } else if (currentStock != null) {
+                refreshDetailQuoteSections(currentStock);
+            }
+        } else {
+            android.util.Log.d(BOARD_THEME_TAG, "syncHotBoard noChange");
+        }
+    }
+
+    private Stock findStock(String code) {
+        if (code == null) {
+            return null;
+        }
+        for (int i = 0; i < stocks.size(); i++) {
+            Stock stock = stocks.get(i);
+            if (code.equals(stock.code)) {
+                return stock;
+            }
+        }
+        return null;
+    }
+
     private void loadData() {
         stocks = stockRepository.loadStocks();
         notes = stockRepository.loadNotes();
+        hotCandidates = hotStockRepository.loadCandidates();
+        syncHotCandidateBoardsToStocks(hotCandidates);
     }
 
     private void seedStocksIfEmpty() {
@@ -1578,6 +2017,105 @@ public class MainActivity extends AppCompatActivity {
 
     private Stock createDefaultStock(String code, String name, String group, String remark) {
         return stockRepository.createDefaultStock(code, name, group, remark);
+    }
+
+    private void prepareDetailCache(Stock stock) {
+        DetailCache cache = stockRepository.loadDetailCache(stock.code);
+        if (cache.news.size() > 0 && newsCache.get(stock.code) == null) {
+            newsCache.put(stock.code, cache.news);
+        }
+        if (cache.opinions.size() > 0 && opinionCache.get(stock.code) == null) {
+            opinionCache.put(stock.code, cache.opinions);
+        }
+        if (cache.newsFetchedAt > 0L) {
+            newsFetchedAtCache.put(stock.code, cache.newsFetchedAt);
+        }
+        if (cache.opinionFetchedAt > 0L) {
+            opinionFetchedAtCache.put(stock.code, cache.opinionFetchedAt);
+        }
+        if (cache.analysisFetchedAt > 0L) {
+            analysisFetchedAtCache.put(stock.code, cache.analysisFetchedAt);
+        }
+
+        boolean newsExpired = isDetailCacheExpired(newsFetchedAtCache.get(stock.code));
+        boolean opinionExpired = isDetailCacheExpired(opinionFetchedAtCache.get(stock.code));
+        boolean analysisExpired = isDetailCacheExpired(analysisFetchedAtCache.get(stock.code))
+                || newsExpired || opinionExpired;
+        if (!analysisExpired && cache.analysis != null && !isUsableDeepSeekAnalysis(cache.analysis)) {
+            deepSeekAnalysisCache.remove(stock.code);
+            analysisFetchedAtCache.remove(stock.code);
+            stockRepository.clearDetailAnalysis(stock.code);
+        } else if (!analysisExpired && cache.analysis != null && deepSeekAnalysisCache.get(stock.code) == null) {
+            deepSeekAnalysisCache.put(stock.code, cache.analysis);
+        } else if (analysisExpired) {
+            deepSeekAnalysisCache.remove(stock.code);
+            analysisFetchedAtCache.remove(stock.code);
+            stockRepository.clearDetailAnalysis(stock.code);
+        }
+    }
+
+    private void refreshExpiredDetailData(Stock stock) {
+        if (isDetailCacheExpired(newsFetchedAtCache.get(stock.code))) {
+            loadStockNews(stock);
+        }
+        if (isDetailCacheExpired(opinionFetchedAtCache.get(stock.code))) {
+            loadStockOpinions(stock);
+        }
+    }
+
+    private boolean isDetailCacheExpired(Long fetchedAt) {
+        return fetchedAt == null || fetchedAt.longValue() <= 0L
+                || System.currentTimeMillis() - fetchedAt.longValue() > DETAIL_CACHE_TTL_MILLIS;
+    }
+
+    private void saveDetailNews(Stock stock, ArrayList<News> news) {
+        long nowMillis = System.currentTimeMillis();
+        newsFetchedAtCache.put(stock.code, nowMillis);
+        invalidateDetailAnalysis(stock.code);
+        DetailCache cache = stockRepository.loadDetailCache(stock.code);
+        cache.stockCode = stock.code;
+        cache.news = news;
+        cache.newsFetchedAt = nowMillis;
+        cache.analysis = null;
+        cache.analysisFetchedAt = 0L;
+        stockRepository.saveDetailCache(cache);
+    }
+
+    private void saveDetailOpinions(Stock stock, ArrayList<Opinion> opinions) {
+        long nowMillis = System.currentTimeMillis();
+        opinionFetchedAtCache.put(stock.code, nowMillis);
+        invalidateDetailAnalysis(stock.code);
+        DetailCache cache = stockRepository.loadDetailCache(stock.code);
+        cache.stockCode = stock.code;
+        cache.opinions = opinions;
+        cache.opinionFetchedAt = nowMillis;
+        cache.analysis = null;
+        cache.analysisFetchedAt = 0L;
+        stockRepository.saveDetailCache(cache);
+    }
+
+    private void saveDetailAnalysis(Stock stock, DeepSeekAnalysisResult result) {
+        if (!isUsableDeepSeekAnalysis(result)) {
+            analysisFetchedAtCache.remove(stock.code);
+            return;
+        }
+        long nowMillis = System.currentTimeMillis();
+        analysisFetchedAtCache.put(stock.code, nowMillis);
+        DetailCache cache = stockRepository.loadDetailCache(stock.code);
+        cache.stockCode = stock.code;
+        cache.analysis = result;
+        cache.analysisFetchedAt = nowMillis;
+        stockRepository.saveDetailCache(cache);
+    }
+
+    private void invalidateDetailAnalysis(String stockCode) {
+        deepSeekAnalysisCache.remove(stockCode);
+        analysisFetchedAtCache.remove(stockCode);
+        stockRepository.clearDetailAnalysis(stockCode);
+    }
+
+    private boolean isUsableDeepSeekAnalysis(DeepSeekAnalysisResult result) {
+        return result != null && result.success && result.hasUsableFactors();
     }
 
     private ArrayList<News> buildNews(Stock stock) {
@@ -1617,11 +2155,13 @@ public class MainActivity extends AppCompatActivity {
                     public void run() {
                         loadingNewsCodes.remove(stock.code);
                         newsCache.put(stock.code, fetchedNews);
+                        saveDetailNews(stock, fetchedNews);
                         android.util.Log.d(TAG, "loadStockNews finish code=" + stock.code
                                 + ", fetchedCount=" + fetchedNews.size()
                                 + ", currentStock=" + (currentStock == null ? "null" : currentStock.code));
                         if (currentStock != null && stock.code.equals(currentStock.code)) {
                             refreshSourceSection(currentStock, true);
+                            refreshWinLossRatioCard(currentStock);
                             loadDeepSeekAnalysisIfReady(currentStock);
                         }
                     }
@@ -1738,6 +2278,13 @@ public class MainActivity extends AppCompatActivity {
                         loadingSubscribedNewsFeed = false;
                         subscribedNewsLoadedOnce = true;
                         newsCache.putAll(fetched);
+                        for (int i = 0; i < stocks.size(); i++) {
+                            Stock stock = stocks.get(i);
+                            ArrayList<News> stockNews = fetched.get(stock.code);
+                            if (stockNews != null) {
+                                saveDetailNews(stock, stockNews);
+                            }
+                        }
                         android.util.Log.d(TAG, "loadSubscribedNews finish fetchedStocks=" + fetched.size()
                                 + ", subscribedCount=" + buildSubscribedNews().size());
                         if (TAB_NEWS.equals(currentTab)) {
@@ -1810,8 +2357,10 @@ public class MainActivity extends AppCompatActivity {
                     public void run() {
                         loadingOpinionCodes.remove(stock.code);
                         opinionCache.put(stock.code, fetchedOpinions);
+                        saveDetailOpinions(stock, fetchedOpinions);
                         if (currentStock != null && stock.code.equals(currentStock.code)) {
                             refreshSourceSection(currentStock, false);
+                            refreshWinLossRatioCard(currentStock);
                             loadDeepSeekAnalysisIfReady(currentStock);
                         }
                     }
@@ -1821,7 +2370,26 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadDeepSeekAnalysisIfReady(final Stock stock) {
-        if (stock == null || deepSeekAnalysisCache.containsKey(stock.code) || loadingDeepSeekCodes.contains(stock.code)) {
+        if (stock == null || loadingDeepSeekCodes.contains(stock.code)) {
+            return;
+        }
+        if (loadingNewsCodes.contains(stock.code) || loadingOpinionCodes.contains(stock.code)) {
+            return;
+        }
+        if (deepSeekAnalysisCache.containsKey(stock.code)) {
+            DeepSeekAnalysisResult cachedAnalysis = deepSeekAnalysisCache.get(stock.code);
+            if (!isUsableDeepSeekAnalysis(cachedAnalysis)) {
+                deepSeekAnalysisCache.remove(stock.code);
+                analysisFetchedAtCache.remove(stock.code);
+                stockRepository.clearDetailAnalysis(stock.code);
+            } else if (!isDetailCacheExpired(analysisFetchedAtCache.get(stock.code))) {
+                return;
+            } else {
+                invalidateDetailAnalysis(stock.code);
+            }
+        }
+        if (isDetailCacheExpired(newsFetchedAtCache.get(stock.code))
+                || isDetailCacheExpired(opinionFetchedAtCache.get(stock.code))) {
             return;
         }
         if (newsCache.get(stock.code) == null || opinionCache.get(stock.code) == null) {
@@ -1840,6 +2408,7 @@ public class MainActivity extends AppCompatActivity {
                     public void run() {
                         loadingDeepSeekCodes.remove(stock.code);
                         deepSeekAnalysisCache.put(stock.code, result);
+                        saveDetailAnalysis(stock, result);
                         if (currentStock != null && stock.code.equals(currentStock.code)) {
                             refreshWinLossRatioCard(currentStock);
                         }
@@ -1859,6 +2428,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void refreshQuotes(final boolean manual) {
+        refreshQuotes(manual, false);
+    }
+
+    private void refreshQuotesOnHomeEntry() {
+        if (homeEntryQuotesRefreshed) {
+            return;
+        }
+        homeEntryQuotesRefreshed = true;
+        android.util.Log.d(TAG, "home entry quote refresh start, stockCount=" + stocks.size());
+        refreshQuotes(false, true);
+    }
+
+    private void refreshQuotes(final boolean manual, boolean force) {
+        if (!force && !manual && !shouldAutoRefreshQuotes()) {
+            return;
+        }
         if (stocks.size() == 0) {
             if (manual) {
                 Toast.makeText(this, "正在刷新大盘指数，暂无自选股可刷新", Toast.LENGTH_SHORT).show();
@@ -1895,12 +2480,17 @@ public class MainActivity extends AppCompatActivity {
                                     : (fetchedIndices.size() > 0 ? "大盘指数已刷新" : "大盘指数刷新失败");
                             Toast.makeText(MainActivity.this, refreshMessage, Toast.LENGTH_SHORT).show();
                         }
-                        refreshVisibleQuoteUi(manual);
+                        if (force) {
+                            android.util.Log.d(TAG, "home entry quote refresh finish success="
+                                    + result.successCount + ", total=" + result.totalCount);
+                        }
+                        refreshVisibleQuoteUi(manual || force);
                         if (result.failedItems.size() > 0) {
                             if (manual) {
                                 showQuoteRefreshFailureDialog(result);
                             } else {
-                                Toast.makeText(MainActivity.this, "自动刷新行情失败：" + result.failedItems.size() + "/" + result.totalCount, Toast.LENGTH_SHORT).show();
+                                android.util.Log.w(TAG, "auto quote refresh failed "
+                                        + result.failedItems.size() + "/" + result.totalCount);
                             }
                         }
                     }
@@ -1909,15 +2499,170 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void refreshManualStockBoardTheme(final Stock stock) {
+        if (stock == null) {
+            return;
+        }
+        if (!StockDisplayText.needsBoardThemeLookup(stock)) {
+            android.util.Log.d(BOARD_THEME_TAG, "manualLookup skip alreadyReady "
+                    + StockDisplayText.debugSummary(this, stock, 14));
+            return;
+        }
+        android.util.Log.d(BOARD_THEME_TAG, "manualLookup start "
+                + StockDisplayText.debugSummary(this, stock, 14));
+        runInBackground(new Runnable() {
+            @Override
+            public void run() {
+                StockQuoteFetcher fetcher = new StockQuoteFetcher();
+                final StockQuoteFetcher.QuoteResult result = fetcher.refreshQuoteDetailed(stock);
+                runOnUiIfAlive(new Runnable() {
+                    @Override
+                    public void run() {
+                        saveStocks();
+                        android.util.Log.d(BOARD_THEME_TAG, "manualLookup finish success="
+                                + result.success + ", message=" + result.message + ", "
+                                + StockDisplayText.debugSummary(MainActivity.this, stock, 14));
+                        if (currentStock != null && stock.code.equals(currentStock.code)) {
+                            refreshDetailQuoteSections(currentStock);
+                        } else if (currentStock == null && TAB_WATCHLIST.equals(currentTab)) {
+                            rememberWatchlistScroll();
+                            showCurrentTab();
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    private void refreshMissingBoards(ArrayList<Stock> displayStocks) {
+        android.util.Log.d(BOARD_THEME_TAG, "autoLookup scan start displayCount="
+                + (displayStocks == null ? 0 : displayStocks.size())
+                + ", loadingBoardCodes=" + loadingBoardCodes.size());
+        if (displayStocks == null || displayStocks.size() == 0) {
+            return;
+        }
+        final ArrayList<Stock> targets = new ArrayList<Stock>();
+        for (int i = 0; i < displayStocks.size(); i++) {
+            Stock stock = displayStocks.get(i);
+            if (stock == null || stock.code == null || stock.code.length() == 0) {
+                continue;
+            }
+            boolean needsLookup = StockDisplayText.needsBoardThemeLookup(stock);
+            boolean loading = loadingBoardCodes.contains(stock.code);
+            android.util.Log.d(BOARD_THEME_TAG, "autoLookup scan item code=" + stock.code
+                    + ", name=" + stock.name
+                    + ", rawIndustry=" + stock.industry
+                    + ", displayBoard=" + StockDisplayText.board(this, stock)
+                    + ", needsLookup=" + needsLookup
+                    + ", loading=" + loading);
+            if (needsLookup && !loading) {
+                loadingBoardCodes.add(stock.code);
+                targets.add(stock);
+            }
+        }
+        if (targets.size() == 0) {
+            android.util.Log.d(BOARD_THEME_TAG, "autoLookup noTargets");
+            return;
+        }
+        android.util.Log.d(BOARD_THEME_TAG, "autoLookup start count=" + targets.size());
+        runInBackground(new Runnable() {
+            @Override
+            public void run() {
+                StockBoardFetcher fetcher = new StockBoardFetcher();
+                for (int i = 0; i < targets.size(); i++) {
+                    Stock stock = targets.get(i);
+                    android.util.Log.d(BOARD_THEME_TAG, "autoLookup target before "
+                            + StockDisplayText.debugSummary(MainActivity.this, stock, 14));
+                }
+                int updatedCount = fetcher.refreshBoards(targets);
+                for (int i = 0; i < targets.size(); i++) {
+                    Stock stock = targets.get(i);
+                    android.util.Log.d(BOARD_THEME_TAG, "autoLookup target after hasBoard="
+                            + StockDisplayText.hasBoard(stock) + ", "
+                            + StockDisplayText.debugSummary(MainActivity.this, stock, 14));
+                }
+                final int finalUpdatedCount = updatedCount;
+                runOnUiIfAlive(new Runnable() {
+                    @Override
+                    public void run() {
+                        for (int i = 0; i < targets.size(); i++) {
+                            loadingBoardCodes.remove(targets.get(i).code);
+                        }
+                        if (finalUpdatedCount > 0) {
+                            saveStocks();
+                            android.util.Log.d(BOARD_THEME_TAG, "autoLookup saved updatedCount="
+                                    + finalUpdatedCount + ", targetCount=" + targets.size());
+                            if (currentStock == null && TAB_WATCHLIST.equals(currentTab)) {
+                                rememberWatchlistScroll();
+                                showCurrentTab();
+                            } else if (currentStock != null) {
+                                refreshDetailQuoteSections(currentStock);
+                            }
+                        } else {
+                            android.util.Log.d(BOARD_THEME_TAG, "autoLookup noSave updatedCount=0"
+                                    + ", targetCount=" + targets.size());
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    private boolean shouldAutoRefreshQuotes() {
+        Calendar now = Calendar.getInstance();
+        int day = now.get(Calendar.DAY_OF_WEEK);
+        if (day == Calendar.SATURDAY || day == Calendar.SUNDAY) {
+            return false;
+        }
+        int hour = now.get(Calendar.HOUR_OF_DAY);
+        int minute = now.get(Calendar.MINUTE);
+        int minutes = hour * 60 + minute;
+        return (minutes >= toMinutes(9, 25) && minutes <= toMinutes(11, 30))
+                || (minutes >= toMinutes(12, 55) && minutes <= toMinutes(15, 5));
+    }
+
+    private int toMinutes(int hour, int minute) {
+        return hour * 60 + minute;
+    }
+
     private void refreshVisibleQuoteUi(boolean manual) {
         if (currentStock != null) {
             refreshDetailQuoteSections(currentStock);
             return;
         }
-        if (manual && TAB_WATCHLIST.equals(currentTab)) {
+        if (TAB_WATCHLIST.equals(currentTab) && (manual || clearExpiredWatchlistAiOpportunities())) {
             rememberWatchlistScroll();
             showCurrentTab();
         }
+    }
+
+    private boolean clearExpiredWatchlistAiOpportunities() {
+        ArrayList<Stock> displayStocks = filterStocks();
+        boolean changed = false;
+        for (int i = 0; i < displayStocks.size(); i++) {
+            Stock stock = displayStocks.get(i);
+            DeepSeekAnalysisResult memoryAnalysis = deepSeekAnalysisCache.get(stock.code);
+            Long memoryFetchedAt = analysisFetchedAtCache.get(stock.code);
+            if (memoryAnalysis != null && isDetailCacheExpired(memoryFetchedAt)) {
+                deepSeekAnalysisCache.remove(stock.code);
+                analysisFetchedAtCache.remove(stock.code);
+                stockRepository.clearDetailAnalysis(stock.code);
+                changed = true;
+                continue;
+            }
+
+            if (memoryAnalysis == null || memoryFetchedAt == null) {
+                DetailCache cache = stockRepository.loadDetailCache(stock.code);
+                Long cacheFetchedAt = cache.analysisFetchedAt > 0L
+                        ? Long.valueOf(cache.analysisFetchedAt)
+                        : null;
+                if (cache.analysis != null && isDetailCacheExpired(cacheFetchedAt)) {
+                    stockRepository.clearDetailAnalysis(stock.code);
+                    changed = true;
+                }
+            }
+        }
+        return changed;
     }
 
     private void refreshDetailQuoteSections(Stock stock) {

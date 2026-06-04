@@ -10,6 +10,7 @@ import com.face.mymoney.model.Stock;
 
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -22,6 +23,7 @@ public class LocalStockRepository {
     private static final String KEY_NOTES = "notes";
     private static final String KEY_GROUPS = "groups";
     private static final String KEY_SAMPLE_CLEANED = "sample_cleaned_v1";
+    private static final String KEY_DETAIL_CACHE_PREFIX = "detail_cache_";
 
     private final Context context;
     private final SharedPreferences preferences;
@@ -45,6 +47,34 @@ public class LocalStockRepository {
 
     public ArrayList<String> loadSavedGroups() {
         return parseStringArray(preferences.getString(KEY_GROUPS, "[]"));
+    }
+
+    public DetailCache loadDetailCache(String stockCode) {
+        String json = preferences.getString(detailCacheKey(stockCode), "");
+        if (json.length() == 0) {
+            return new DetailCache();
+        }
+        try {
+            return DetailCache.fromJson(new JSONObject(json));
+        } catch (JSONException e) {
+            android.util.Log.w(TAG, "loadDetailCache failed code=" + stockCode + ": " + e.getMessage());
+            return new DetailCache();
+        }
+    }
+
+    public void saveDetailCache(DetailCache cache) {
+        if (cache == null || cache.stockCode == null || cache.stockCode.length() == 0) {
+            return;
+        }
+        preferences.edit().putString(detailCacheKey(cache.stockCode), cache.toJson().toString()).apply();
+    }
+
+    public void clearDetailAnalysis(String stockCode) {
+        DetailCache cache = loadDetailCache(stockCode);
+        cache.stockCode = stockCode;
+        cache.analysis = null;
+        cache.analysisFetchedAt = 0L;
+        saveDetailCache(cache);
     }
 
     public void saveStocks(ArrayList<Stock> stocks) {
@@ -200,6 +230,10 @@ public class LocalStockRepository {
 
     private String getString(int resId, Object... args) {
         return context.getString(resId, args);
+    }
+
+    private String detailCacheKey(String stockCode) {
+        return KEY_DETAIL_CACHE_PREFIX + (stockCode == null ? "" : stockCode);
     }
 
     private boolean isSampleStock(Stock stock) {

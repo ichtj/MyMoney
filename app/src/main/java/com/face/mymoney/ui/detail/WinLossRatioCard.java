@@ -15,11 +15,13 @@ import com.face.mymoney.R;
 import com.face.mymoney.ai.DeepSeekAnalysisResult;
 import com.face.mymoney.model.DecisionNote;
 import com.face.mymoney.model.Stock;
+import com.face.mymoney.ratio.WinLossRatioCalculator;
+import com.face.mymoney.ratio.WinLossRatioInput;
+import com.face.mymoney.ratio.WinLossRatioResult;
 import com.face.mymoney.ui.ResponsiveMetrics;
 import com.face.mymoney.ui.widget.PieRatioView;
 
 import java.util.ArrayList;
-import java.util.Locale;
 
 public class WinLossRatioCard {
     private static final int COLOR_CARD = Color.WHITE;
@@ -38,8 +40,9 @@ public class WinLossRatioCard {
     public static View create(Context context, Stock stock, ArrayList<DecisionNote> notes,
                               DeepSeekAnalysisResult aiReference, boolean loadingAiReference,
                               View.OnClickListener aiClickListener) {
-        RatioData data = calculate(context, stock, notes);
-        applyAiRatio(data, aiReference);
+        WinLossRatioResult data = new WinLossRatioCalculator()
+                .calculate(new WinLossRatioInput(stock, notes, aiReference));
+        applyAdvice(context, data);
 
         LinearLayout card = vertical(context);
         card.setPadding(dp(context, 16), dp(context, 16), dp(context, 16), dp(context, 16));
@@ -54,29 +57,44 @@ public class WinLossRatioCard {
 
         LinearLayout body = horizontal(context);
         body.setGravity(Gravity.CENTER_VERTICAL);
-
-        PieRatioView pie = new PieRatioView(context);
-        pie.setRatio(data.opportunityRatio, COLOR_OPPORTUNITY, COLOR_RISK, COLOR_CARD);
-        if (aiClickListener != null) {
-            pie.setOnClickListener(aiClickListener);
-            pie.setClickable(true);
-        }
-        body.addView(pie, new LinearLayout.LayoutParams(dp(context, 116), dp(context, 116)));
-        body.addView(spacer(context, 16, 1));
-
         LinearLayout info = vertical(context);
-        info.addView(text(context, context.getString(R.string.win_loss_ratio_format, data.ratioText), 24, COLOR_TEXT, true), matchWrap());
-        info.addView(spacer(context, 4));
-        TextView explanation = text(context, data.ratioExplanation, 12, COLOR_SUB, false);
-        explanation.setLineSpacing(dp(context, 2), 1.0f);
-        info.addView(explanation, matchWrap());
-        info.addView(spacer(context, 8));
-        info.addView(legend(context, context.getString(R.string.win_loss_opportunity_format, data.opportunityPercent), COLOR_OPPORTUNITY), matchWrap());
-        info.addView(spacer(context, 6));
-        info.addView(legend(context, context.getString(R.string.win_loss_risk_format, data.riskPercent), COLOR_RISK), matchWrap());
-        if (aiClickListener != null) {
-            info.setOnClickListener(aiClickListener);
-            info.setClickable(true);
+        if (data.hasDisplayRatio()) {
+            PieRatioView pie = new PieRatioView(context);
+            pie.setRatio(data.opportunityRatio, COLOR_OPPORTUNITY, COLOR_RISK, COLOR_CARD);
+            if (aiClickListener != null) {
+                pie.setOnClickListener(aiClickListener);
+                pie.setClickable(true);
+            }
+            body.addView(pie, new LinearLayout.LayoutParams(dp(context, 116), dp(context, 116)));
+            body.addView(spacer(context, 16, 1));
+
+            info.addView(text(context, context.getString(R.string.win_loss_ratio_format, data.ratioText), 24, COLOR_TEXT, true), matchWrap());
+            info.addView(spacer(context, 4));
+            TextView explanation = text(context, data.ratioExplanation, 12, COLOR_SUB, false);
+            explanation.setLineSpacing(dp(context, 2), 1.0f);
+            info.addView(explanation, matchWrap());
+            info.addView(spacer(context, 8));
+            info.addView(legend(context, context.getString(R.string.win_loss_opportunity_format, data.opportunityPercent), COLOR_OPPORTUNITY), matchWrap());
+            info.addView(spacer(context, 6));
+            info.addView(legend(context, context.getString(R.string.win_loss_risk_format, data.riskPercent), COLOR_RISK), matchWrap());
+            if (aiClickListener != null) {
+                info.setOnClickListener(aiClickListener);
+                info.setClickable(true);
+            }
+        } else {
+            info.setPadding(dp(context, 12), dp(context, 12), dp(context, 12), dp(context, 12));
+            info.setBackground(rounded(COLOR_ACCENT_SOFT, dp(context, 12)));
+            info.addView(text(context, "AI 分项分析待生成", 18, COLOR_TEXT, true), matchWrap());
+            info.addView(spacer(context, 6));
+            TextView waiting = text(context, loadingAiReference
+                    ? "正在结合新闻、市场观点和个股信息生成分项评分，完成后参与本地胜负比合成。"
+                    : "没有有效目标价/止损价或 AI 分项评分时不显示默认 50%，点击卡片可查看或重新触发分析。", 13, COLOR_SUB, false);
+            waiting.setLineSpacing(dp(context, 3), 1.0f);
+            info.addView(waiting, matchWrap());
+            if (aiClickListener != null) {
+                info.setOnClickListener(aiClickListener);
+                info.setClickable(true);
+            }
         }
         body.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         card.addView(body, matchWrap());
@@ -90,7 +108,8 @@ public class WinLossRatioCard {
 
         if (data.hasValidPlan) {
             card.addView(spacer(context, 10));
-            card.addView(text(context, context.getString(R.string.win_loss_price_format, stock.price, data.targetPrice, data.stopLossPrice), 12, COLOR_SUB, false), matchWrap());
+            card.addView(text(context, context.getString(R.string.win_loss_price_format,
+                    stock.price, data.targetPrice, data.stopLossPrice), 12, COLOR_SUB, false), matchWrap());
         }
         String aiText = aiReference == null ? "" : safeText(aiReference.displayText());
         if (loadingAiReference || aiText.length() > 0) {
@@ -98,9 +117,11 @@ public class WinLossRatioCard {
             LinearLayout aiBox = vertical(context);
             aiBox.setPadding(dp(context, 12), dp(context, 10), dp(context, 12), dp(context, 10));
             aiBox.setBackground(rounded(COLOR_AI_SOFT, dp(context, 12)));
-            aiBox.addView(text(context, aiReference != null && aiReference.hasRatio ? "DeepSeek 胜负比参考" : "DeepSeek 信息分析", 13, COLOR_TEXT, true), matchWrap());
+            aiBox.addView(text(context, "DeepSeek 分项分析", 13, COLOR_TEXT, true), matchWrap());
             aiBox.addView(spacer(context, 5));
-            TextView aiContent = text(context, loadingAiReference ? "正在结合爬虫新闻、市场观点和个人记录生成胜负比参考..." : aiText, 13, COLOR_TEXT, false);
+            TextView aiContent = text(context, loadingAiReference
+                    ? "正在生成信息一致性、新闻情绪等 AI 分项评分..."
+                    : aiText, 13, COLOR_TEXT, false);
             aiContent.setLineSpacing(dp(context, 3), 1.0f);
             aiBox.addView(aiContent, matchWrap());
             if (aiClickListener != null && !loadingAiReference && aiText.length() > 0) {
@@ -109,92 +130,25 @@ public class WinLossRatioCard {
             }
             card.addView(aiBox, matchWrap());
         }
+        card.addView(spacer(context, 10));
+        TextView opportunityHint = text(context, context.getString(R.string.win_loss_opportunity_hint), 12, COLOR_SUB, false);
+        opportunityHint.setPadding(dp(context, 12), dp(context, 9), dp(context, 12), dp(context, 9));
+        opportunityHint.setLineSpacing(dp(context, 2), 1.0f);
+        opportunityHint.setBackground(rounded(Color.rgb(255, 247, 237), dp(context, 12)));
+        card.addView(opportunityHint, matchWrap());
         return card;
     }
 
-    private static RatioData calculate(Context context, Stock stock, ArrayList<DecisionNote> notes) {
-        RatioData data = new RatioData();
-        data.opportunityRatio = 0.5f;
-        data.opportunityPercent = 50;
-        data.riskPercent = 50;
-        data.ratioText = "--";
-        data.ratioExplanation = "需要目标价、止损价或通过校验的 AI 比例后才能解释胜负比。";
-        data.advice = context.getString(R.string.win_loss_need_plan);
-
-        double current = parsePrice(stock.price);
-        DecisionNote plan = findLatestPlan(notes);
-        if (plan == null || current <= 0d) {
-            return data;
+    private static void applyAdvice(Context context, WinLossRatioResult data) {
+        if (!data.hasDisplayRatio()) {
+            return;
         }
-
-        double target = parsePrice(plan.targetPrice);
-        double stopLoss = parsePrice(plan.stopLossPrice);
-        data.targetPrice = plan.targetPrice;
-        data.stopLossPrice = plan.stopLossPrice;
-        if (target <= current || stopLoss <= 0d || stopLoss >= current) {
-            return data;
-        }
-
-        double opportunity = target - current;
-        double risk = current - stopLoss;
-        double total = opportunity + risk;
-        if (total <= 0d) {
-            return data;
-        }
-
-        double ratio = opportunity / risk;
-        data.hasValidPlan = true;
-        data.opportunityRatio = (float) (opportunity / total);
-        data.opportunityPercent = Math.round(data.opportunityRatio * 100f);
-        data.riskPercent = 100 - data.opportunityPercent;
-        data.ratioText = String.format(Locale.CHINA, "%.2f", ratio);
-        data.ratioExplanation = "含义：每承担 1 份风险，对应 " + data.ratioText + " 份机会。";
-        data.adviceType = ratio >= 2.0d ? 2 : ratio >= 1.2d ? 1 : 0;
         if (data.adviceType == 2) {
             data.advice = context.getString(R.string.win_loss_good);
         } else if (data.adviceType == 1) {
             data.advice = context.getString(R.string.win_loss_normal);
         } else {
             data.advice = context.getString(R.string.win_loss_weak);
-        }
-        return data;
-    }
-
-    private static void applyAiRatio(RatioData data, DeepSeekAnalysisResult aiReference) {
-        if (aiReference == null || !aiReference.success || !aiReference.hasRatio) {
-            return;
-        }
-        data.hasAiRatio = true;
-        data.opportunityPercent = aiReference.opportunityPercent;
-        data.riskPercent = aiReference.riskPercent;
-        data.opportunityRatio = aiReference.opportunityPercent / 100f;
-        data.ratioText = aiReference.ratioText;
-        data.ratioExplanation = "AI含义：每承担 1 份风险，对应 " + data.ratioText + " 份机会。";
-        data.advice = aiReference.summary;
-    }
-
-    private static DecisionNote findLatestPlan(ArrayList<DecisionNote> notes) {
-        for (int i = 0; i < notes.size(); i++) {
-            DecisionNote note = notes.get(i);
-            if (parsePrice(note.targetPrice) > 0d && parsePrice(note.stopLossPrice) > 0d) {
-                return note;
-            }
-        }
-        return null;
-    }
-
-    private static double parsePrice(String value) {
-        if (value == null) {
-            return -1d;
-        }
-        String cleaned = value.replace(",", "")
-                .replace(String.valueOf('\u5143'), "")
-                .replace(String.valueOf('\uffe5'), "")
-                .trim();
-        try {
-            return Double.parseDouble(cleaned);
-        } catch (NumberFormatException e) {
-            return -1d;
         }
     }
 
@@ -262,19 +216,5 @@ public class WinLossRatioCard {
 
     private static int dp(Context context, int value) {
         return ResponsiveMetrics.dp(context, value);
-    }
-
-    private static class RatioData {
-        boolean hasValidPlan;
-        float opportunityRatio;
-        int opportunityPercent;
-        int riskPercent;
-        int adviceType;
-        String ratioText;
-        String ratioExplanation;
-        String advice;
-        String targetPrice = "--";
-        String stopLossPrice = "--";
-        boolean hasAiRatio;
     }
 }

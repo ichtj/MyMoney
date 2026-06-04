@@ -56,7 +56,7 @@ public class StockQuoteFetcher {
     private QuoteResult refreshQuoteFromEastmoney(Stock stock) {
         String url = "https://push2.eastmoney.com/api/qt/stock/get?secid="
                 + secId(stock.code)
-                + "&fields=f43,f57,f58,f60,f168,f169,f170";
+                + "&fields=f43,f57,f58,f60,f100,f168,f169,f170";
         try {
             SimpleHttpClient.HttpText response = httpClient.get(url, TIMEOUT_MILLIS, MAX_READ_BYTES,
                     "application/json,text/plain,*/*", USER_AGENT);
@@ -77,8 +77,23 @@ public class StockQuoteFetcher {
             String price = formatScaled(data.opt("f43"), 2);
             String changePercent = formatPercent(data.opt("f170"));
             String turnover = formatPercent(data.opt("f168"));
+            String industry = cleanText(data.optString("f100", ""));
+            android.util.Log.d(TAG, "eastmoney parsed code=" + stock.code
+                    + ", rawF100=" + data.optString("f100", "")
+                    + ", parsedIndustry=" + industry
+                    + ", price=" + price
+                    + ", change=" + changePercent
+                    + ", oldIndustry=" + stock.industry);
+            if (industry.length() > 0 && !"--".equals(industry)) {
+                stock.industry = industry;
+                android.util.Log.d(TAG, "industry updated from eastmoney code=" + stock.code
+                        + ", industry=" + stock.industry);
+            }
             if (price.length() == 0 || changePercent.length() == 0) {
                 android.util.Log.w(TAG, "quote empty fields code=" + stock.code + ", body=" + preview(response.body));
+                if (industry.length() > 0 && !"--".equals(industry)) {
+                    return QuoteResult.success("Eastmoney industry-only");
+                }
                 return QuoteResult.fail("empty required quote fields");
             }
 
@@ -91,6 +106,7 @@ public class StockQuoteFetcher {
                     + ", price=" + stock.price
                     + ", change=" + stock.changePercent
                     + ", turnover=" + stock.turnover
+                    + ", industry=" + stock.industry
                     + ", elapsedMs=" + response.elapsedMillis);
             return QuoteResult.success("Eastmoney");
         } catch (Exception e) {
@@ -185,6 +201,14 @@ public class StockQuoteFetcher {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private String cleanText(String value) {
+        if (value == null) {
+            return "";
+        }
+        String text = value.replaceAll("\\s+", " ").trim();
+        return "-".equals(text) ? "" : text;
     }
 
     private String preview(String value) {

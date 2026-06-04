@@ -1,0 +1,73 @@
+[
+  {
+    "id": "eastmoney",
+    "name": "东方财富",
+    "type": "eastmoney",
+    "enabled": true,
+    "weight": 100,
+    "rankPageSize": 220,
+    "limitUpPageSize": 0,
+    "channels": [
+      {
+        "id": "gainers",
+        "enabled": true,
+        "weight": 22,
+        "sortField": "f3"
+      },
+      {
+        "id": "amount",
+        "enabled": true,
+        "weight": 38,
+        "sortField": "f6"
+      },
+      {
+        "id": "turnover",
+        "enabled": true,
+        "weight": 32,
+        "sortField": "f8"
+      }
+    ]
+  },
+  {
+    "id": "sina",
+    "name": "新浪财经",
+    "type": "sina",
+    "enabled": true,
+    "weight": 70,
+    "rankPageSize": 180,
+    "channels": [
+      {
+        "id": "gainers",
+        "enabled": true,
+        "weight": 16,
+        "sortField": "changepercent"
+      },
+      {
+        "id": "amount",
+        "enabled": true,
+        "weight": 30,
+        "sortField": "amount"
+      },
+      {
+        "id": "turnover",
+        "enabled": true,
+        "weight": 24,
+        "sortField": "turnoverratio"
+      }
+    ]
+  },
+  {
+    "id": "xueqiu",
+    "name": "雪球",
+    "type": "xueqiu",
+    "enabled": false,
+    "weight": 80
+  },
+  {
+    "id": "ths",
+    "name": "同花顺",
+    "type": "ths",
+    "enabled": false,
+    "weight": 80
+  }
+]

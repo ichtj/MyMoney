@@ -1,5 +1,7 @@
 package com.face.mymoney.model;
 
+import org.json.JSONObject;
+
 public class News {
     public String title;
     public String source;
@@ -13,5 +15,27 @@ public class News {
         this.time = time;
         this.keyword = keyword;
         this.content = content;
+    }
+
+    public JSONObject toJson() {
+        JSONObject object = new JSONObject();
+        try {
+            object.put("title", title);
+            object.put("source", source);
+            object.put("time", time);
+            object.put("keyword", keyword);
+            object.put("content", content);
+        } catch (Exception ignored) {
+        }
+        return object;
+    }
+
+    public static News fromJson(JSONObject object) {
+        return new News(
+                object.optString("title", ""),
+                object.optString("source", ""),
+                object.optString("time", ""),
+                object.optString("keyword", ""),
+                object.optString("content", ""));
     }
 }

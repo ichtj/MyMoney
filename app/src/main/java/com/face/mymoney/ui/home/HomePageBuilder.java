@@ -3,6 +3,7 @@ package com.face.mymoney.ui.home;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -10,6 +11,7 @@ import android.view.ViewConfiguration;
 import android.widget.Button;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -18,10 +20,14 @@ import com.face.mymoney.model.DecisionNote;
 import com.face.mymoney.model.MarketIndexQuote;
 import com.face.mymoney.model.Stock;
 import com.face.mymoney.ui.MainUiKit;
+import com.face.mymoney.ui.StockDisplayText;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 public class HomePageBuilder {
+    private static final String BOARD_THEME_TAG = "MyMoneyBoardTheme";
+
     public interface Listener {
         void onAddStock();
 
@@ -35,6 +41,10 @@ public class HomePageBuilder {
 
         void onDeleteStock(Stock stock);
 
+        void onMoveStockTop(Stock stock);
+
+        void onMoveStockBottom(Stock stock);
+
         void onDebugRequested();
     }
 
@@ -45,6 +55,7 @@ public class HomePageBuilder {
     private static final int COLOR_ACCENT_SOFT = Color.rgb(234, 241, 255);
     private static final int COLOR_RISE = Color.rgb(217, 45, 32);
     private static final int COLOR_FALL = Color.rgb(7, 148, 85);
+    private static final int COLOR_NEUTRAL = Color.rgb(245, 158, 11);
     private static final int ACTION_WIDTH_DP = 124;
     private static final int ACTION_TRIGGER_DP = 58;
 
@@ -55,6 +66,7 @@ public class HomePageBuilder {
     private final ArrayList<Stock> stocks;
     private final ArrayList<Stock> displayStocks;
     private final ArrayList<DecisionNote> notes;
+    private final HashMap<String, Integer> aiOpportunityPercents;
     private final ArrayList<MarketIndexQuote> marketIndices;
     private final ArrayList<String> groups;
     private final String selectedGroup;
@@ -64,7 +76,8 @@ public class HomePageBuilder {
 
     public HomePageBuilder(Context context, MainUiKit ui, Listener listener, String userName,
                            ArrayList<Stock> stocks, ArrayList<Stock> displayStocks,
-                           ArrayList<DecisionNote> notes, ArrayList<MarketIndexQuote> marketIndices,
+                           ArrayList<DecisionNote> notes, HashMap<String, Integer> aiOpportunityPercents,
+                           ArrayList<MarketIndexQuote> marketIndices,
                            ArrayList<String> groups,
                            String selectedGroup, int riskStockCount) {
         this.context = context;
@@ -74,6 +87,7 @@ public class HomePageBuilder {
         this.stocks = stocks;
         this.displayStocks = displayStocks;
         this.notes = notes;
+        this.aiOpportunityPercents = aiOpportunityPercents == null ? new HashMap<String, Integer>() : aiOpportunityPercents;
         this.marketIndices = marketIndices;
         this.groups = groups;
         this.selectedGroup = selectedGroup;
@@ -258,7 +272,18 @@ public class HomePageBuilder {
             private float downX;
             private float downY;
             private boolean swiping;
+            private boolean longPressTriggered;
             private int startActionWidth;
+            private final Runnable longPressRunnable = new Runnable() {
+                @Override
+                public void run() {
+                    if (!swiping) {
+                        longPressTriggered = true;
+                        closeOpenActions(null);
+                        showMovePopup(card, stock);
+                    }
+                }
+            };
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -267,15 +292,20 @@ public class HomePageBuilder {
                     downX = event.getX();
                     downY = event.getY();
                     swiping = false;
+                    longPressTriggered = false;
                     startActionWidth = actionRow.getLayoutParams().width;
                     if (openActionRow != null && openActionRow != actionRow) {
                         closeOpenActions(actionRow);
                     }
+                    v.postDelayed(longPressRunnable, ViewConfiguration.getLongPressTimeout());
                     return true;
                 }
                 if (event.getAction() == MotionEvent.ACTION_MOVE) {
                     float dx = event.getX() - downX;
                     float dy = event.getY() - downY;
+                    if (Math.abs(dx) > touchSlop || Math.abs(dy) > touchSlop) {
+                        v.removeCallbacks(longPressRunnable);
+                    }
                     if (!swiping && Math.abs(dx) > touchSlop && Math.abs(dx) > Math.abs(dy) * 1.2f) {
                         swiping = true;
                         v.getParent().requestDisallowInterceptTouchEvent(true);
@@ -287,9 +317,13 @@ public class HomePageBuilder {
                     }
                 }
                 if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                    v.removeCallbacks(longPressRunnable);
                     float dx = event.getX() - downX;
                     float dy = event.getY() - downY;
                     v.getParent().requestDisallowInterceptTouchEvent(false);
+                    if (longPressTriggered) {
+                        return true;
+                    }
                     if (swiping) {
                         int width = actionRow.getLayoutParams().width;
                         if (width >= ui.dp(ACTION_TRIGGER_DP)) {
@@ -318,7 +352,18 @@ public class HomePageBuilder {
         row.setGravity(Gravity.CENTER_VERTICAL);
 
         LinearLayout nameBox = ui.vertical();
-        nameBox.addView(singleLineText(stock.name, 16, COLOR_TEXT, true), ui.matchWrap());
+        LinearLayout titleRow = ui.horizontal();
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        titleRow.addView(singleLineText(stock.name, 16, COLOR_TEXT, true),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        View opportunityBadge = opportunityBadge(stock);
+        if (opportunityBadge != null) {
+            titleRow.addView(ui.spacer(ui.dp(6), 1));
+            titleRow.addView(opportunityBadge, new LinearLayout.LayoutParams(ui.dp(42), ui.dp(42)));
+        }
+        titleRow.addView(ui.spacer(ui.dp(6), 1));
+        titleRow.addView(boardThemeTag(stock), ui.wrapWrap());
+        nameBox.addView(titleRow, ui.matchWrap());
         String meta = stock.code + " · " + stock.market + " · " + stock.groupName
                 + " · " + getNotes(stock.code).size() + "记";
         TextView metaView = singleLineText(meta, 11, COLOR_SUB, false);
@@ -340,6 +385,69 @@ public class HomePageBuilder {
         wrapper.addView(card, ui.weightWrap(1));
         wrapper.addView(actionPanel(stock), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT));
         return wrapper;
+    }
+
+    private TextView boardThemeTag(Stock stock) {
+        String board = StockDisplayText.board(context, stock);
+        Log.d(BOARD_THEME_TAG, "watchlist render boardTag code=" + stock.code
+                + ", name=" + stock.name
+                + ", rawIndustry=" + stock.industry
+                + ", renderedBoard=" + board
+                + ", " + StockDisplayText.debugSummary(context, stock, 14));
+        return ui.tag(/*context.getString(R.string.stock_board) + " " + */board,
+                COLOR_ACCENT_SOFT, COLOR_ACCENT);
+    }
+
+    private View opportunityBadge(Stock stock) {
+        Integer percent = aiOpportunityPercents.get(stock.code);
+        if (percent == null || percent.intValue() < 0 || percent.intValue() > 100) {
+            return null;
+        }
+        int color = opportunityColor(percent.intValue());
+        TextView badge = singleLineText(percent.intValue() + "%", 12, color, true);
+        badge.setGravity(Gravity.CENTER);
+        badge.setBackground(circleStroke(color));
+        return badge;
+    }
+
+    private int opportunityColor(int percent) {
+        if (percent > 50) {
+            return COLOR_RISE;
+        }
+        if (percent < 50) {
+            return COLOR_FALL;
+        }
+        return COLOR_NEUTRAL;
+    }
+
+    private GradientDrawable circleStroke(int color) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setShape(GradientDrawable.OVAL);
+        drawable.setColor(Color.WHITE);
+        drawable.setStroke(ui.dp(2), color);
+        return drawable;
+    }
+
+    private void showMovePopup(View anchor, final Stock stock) {
+        PopupMenu menu = new PopupMenu(context, anchor);
+        menu.getMenu().add("置顶");
+        menu.getMenu().add("置底");
+        menu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+            @Override
+            public boolean onMenuItemClick(android.view.MenuItem item) {
+                String title = String.valueOf(item.getTitle());
+                if ("置顶".equals(title)) {
+                    listener.onMoveStockTop(stock);
+                    return true;
+                }
+                if ("置底".equals(title)) {
+                    listener.onMoveStockBottom(stock);
+                    return true;
+                }
+                return false;
+            }
+        });
+        menu.show();
     }
 
     private View actionPanel(final Stock stock) {

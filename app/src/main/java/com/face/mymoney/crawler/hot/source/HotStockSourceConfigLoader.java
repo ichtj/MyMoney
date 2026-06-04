@@ -1,0 +1,83 @@
+package com.face.mymoney.crawler.hot.source;
+
+import android.content.Context;
+
+import org.json.JSONArray;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.ArrayList;
+
+public class HotStockSourceConfigLoader {
+    private static final String TAG = "MyMoneyHotSourceCfg";
+    private static final String ASSET_NAME = "hot_stock_sources.json";
+
+    private final Context context;
+
+    public HotStockSourceConfigLoader(Context context) {
+        this.context = context.getApplicationContext();
+    }
+
+    public ArrayList<HotStockSourceConfig> loadEnabledConfigs() {
+        ArrayList<HotStockSourceConfig> result = new ArrayList<HotStockSourceConfig>();
+        ArrayList<HotStockSourceConfig> configs = loadConfigs();
+        for (int i = 0; i < configs.size(); i++) {
+            HotStockSourceConfig config = configs.get(i);
+            if (config.enabled && config.id.length() > 0) {
+                result.add(config);
+            }
+        }
+        return result;
+    }
+
+    private ArrayList<HotStockSourceConfig> loadConfigs() {
+        ArrayList<HotStockSourceConfig> result = new ArrayList<HotStockSourceConfig>();
+        try {
+            JSONArray array = new JSONArray(readAssetText());
+            for (int i = 0; i < array.length(); i++) {
+                result.add(HotStockSourceConfig.fromJson(array.getJSONObject(i)));
+            }
+        } catch (Exception e) {
+            android.util.Log.w(TAG, "loadConfigs failed: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            result.clear();
+            addDefaultConfigs(result);
+        }
+        return result;
+    }
+
+    private void addDefaultConfigs(ArrayList<HotStockSourceConfig> result) {
+        HotStockSourceConfig eastmoney = new HotStockSourceConfig();
+        eastmoney.id = "eastmoney";
+        eastmoney.name = "东方财富";
+        eastmoney.type = "eastmoney";
+        eastmoney.enabled = true;
+        eastmoney.weight = 100;
+        eastmoney.rankPageSize = 220;
+        eastmoney.limitUpPageSize = 0;
+        eastmoney.channels.add(defaultChannel("gainers", 22, "f3"));
+        eastmoney.channels.add(defaultChannel("amount", 38, "f6"));
+        eastmoney.channels.add(defaultChannel("turnover", 32, "f8"));
+        result.add(eastmoney);
+    }
+
+    private HotStockSourceChannelConfig defaultChannel(String id, int weight, String sortField) {
+        HotStockSourceChannelConfig config = new HotStockSourceChannelConfig();
+        config.id = id;
+        config.enabled = true;
+        config.weight = weight;
+        config.sortField = sortField;
+        return config;
+    }
+
+    private String readAssetText() throws Exception {
+        InputStream inputStream = context.getAssets().open(ASSET_NAME);
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        byte[] buffer = new byte[4096];
+        int length;
+        while ((length = inputStream.read(buffer)) != -1) {
+            outputStream.write(buffer, 0, length);
+        }
+        inputStream.close();
+        return outputStream.toString("UTF-8");
+    }
+}
