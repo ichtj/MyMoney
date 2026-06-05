@@ -57,6 +57,34 @@
     ]
   },
   {
+    "id": "tencent",
+    "name": "腾讯行情",
+    "type": "tencent",
+    "enabled": true,
+    "weight": 55,
+    "rankPageSize": 150,
+    "channels": [
+      {
+        "id": "gainers",
+        "enabled": true,
+        "weight": 12,
+        "sortField": "changepercent"
+      },
+      {
+        "id": "amount",
+        "enabled": true,
+        "weight": 22,
+        "sortField": "amount"
+      },
+      {
+        "id": "turnover",
+        "enabled": true,
+        "weight": 18,
+        "sortField": "turnoverratio"
+      }
+    ]
+  },
+  {
     "id": "xueqiu",
     "name": "雪球",
     "type": "xueqiu",

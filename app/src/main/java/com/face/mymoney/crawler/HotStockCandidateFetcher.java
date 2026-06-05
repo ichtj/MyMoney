@@ -124,13 +124,19 @@ public class HotStockCandidateFetcher {
         HashSet<String> selectedCodes = new HashSet<String>();
         int[] singleSourceCount = new int[]{0};
 
-        addFinalCandidates(result, selectedCodes, sorted, true, singleSourceCount);
-        addFinalCandidates(result, selectedCodes, sorted, false, singleSourceCount);
+        addFinalCandidates(result, selectedCodes, sorted, true, true, singleSourceCount);
+        addFinalCandidates(result, selectedCodes, sorted, true, false, singleSourceCount);
+        int klineOnlyResultSize = result.size();
+        if (result.size() < MIN_KLINE_RANK_LIMIT) {
+            addFinalCandidates(result, selectedCodes, sorted, false, false, singleSourceCount);
+        }
 
         android.util.Log.d(TAG, "rank_policy result=" + result.size()
                 + ", accepted=" + filtered.size()
                 + ", singleSource=" + countSingleSource(result)
                 + ", klineMissing=" + countMissingKline(result)
+                + ", klineAvailable=" + countRecentKline(filtered)
+                + ", klineOnlyResult=" + klineOnlyResultSize
                 + ", maxSingleSource=" + MAX_SINGLE_SOURCE_RESULT
                 + ", minKlineRankLimit=" + MIN_KLINE_RANK_LIMIT);
         return result;
@@ -140,6 +146,7 @@ public class HotStockCandidateFetcher {
                                     HashSet<String> selectedCodes,
                                     ArrayList<HotStockCandidate> sorted,
                                     boolean requireKline,
+                                    boolean enforceSingleSourceCap,
                                     int[] singleSourceCount) {
         for (int i = 0; i < sorted.size() && result.size() < TARGET_SIZE; i++) {
             HotStockCandidate candidate = sorted.get(i);
@@ -149,10 +156,9 @@ public class HotStockCandidateFetcher {
             if (requireKline && !candidate.hasRecentKlineData) {
                 continue;
             }
-            if (!requireKline && result.size() < MIN_KLINE_RANK_LIMIT) {
-                continue;
-            }
-            if (candidate.sourceCount <= 1 && singleSourceCount[0] >= MAX_SINGLE_SOURCE_RESULT) {
+            if (enforceSingleSourceCap
+                    && candidate.sourceCount <= 1
+                    && singleSourceCount[0] >= MAX_SINGLE_SOURCE_RESULT) {
                 continue;
             }
             result.add(candidate);
@@ -206,6 +212,16 @@ public class HotStockCandidateFetcher {
         int count = 0;
         for (int i = 0; i < candidates.size(); i++) {
             if (!candidates.get(i).hasRecentKlineData) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private int countRecentKline(ArrayList<HotStockCandidate> candidates) {
+        int count = 0;
+        for (int i = 0; i < candidates.size(); i++) {
+            if (candidates.get(i).hasRecentKlineData) {
                 count++;
             }
         }
@@ -269,8 +285,10 @@ public class HotStockCandidateFetcher {
         }
         Integer eastmoneyCount = sourceCounts.get("eastmoney");
         Integer sinaCount = sourceCounts.get("sina");
+        Integer tencentCount = sourceCounts.get("tencent");
         sourceSummary = "东方财富" + (eastmoneyCount == null ? "--" : String.valueOf(eastmoneyCount))
-                + " / 新浪" + (sinaCount == null ? "--" : String.valueOf(sinaCount));
+                + " / 新浪" + (sinaCount == null ? "--" : String.valueOf(sinaCount))
+                + " / 腾讯" + (tencentCount == null ? "--" : String.valueOf(tencentCount));
         if (eastmoneyCount != null && sinaCount != null && sinaCount > 0
                 && eastmoneyCount < MIN_HEALTHY_EASTMONEY_COUNT) {
             sourceDegraded = true;
@@ -282,7 +300,34 @@ public class HotStockCandidateFetcher {
                     + ", sourceCounts=" + sourceCounts);
         }
         applyPlatformScores(byCode, platformChannelScores, platformWeights, platformNames, channelNames);
+        logMergedSourceStats(byCode);
         return new ArrayList<HotStockCandidate>(byCode.values());
+    }
+
+    private void logMergedSourceStats(HashMap<String, HotStockCandidate> byCode) {
+        int source1 = 0;
+        int source2 = 0;
+        int source3Plus = 0;
+        int tencentTouched = 0;
+        for (Map.Entry<String, HotStockCandidate> entry : byCode.entrySet()) {
+            HotStockCandidate candidate = entry.getValue();
+            if (candidate.sourceCount <= 1) {
+                source1++;
+            } else if (candidate.sourceCount == 2) {
+                source2++;
+            } else {
+                source3Plus++;
+            }
+            String sources = candidate.sourceSummary == null ? "" : candidate.sourceSummary;
+            if (sources.contains("腾讯") || sources.contains("鑵捐")) {
+                tencentTouched++;
+            }
+        }
+        android.util.Log.d(TAG, "merge source stats total=" + byCode.size()
+                + ", source1=" + source1
+                + ", source2=" + source2
+                + ", source3plus=" + source3Plus
+                + ", tencentTouched=" + tencentTouched);
     }
 
     private void addPlatformScore(HashMap<String, HashMap<String, Integer>> platformChannelScores,

@@ -58,6 +58,19 @@ public class HotStockSourceConfigLoader {
         eastmoney.channels.add(defaultChannel("amount", 38, "f6"));
         eastmoney.channels.add(defaultChannel("turnover", 32, "f8"));
         result.add(eastmoney);
+
+        HotStockSourceConfig tencent = new HotStockSourceConfig();
+        tencent.id = "tencent";
+        tencent.name = "鑵捐琛屾儏";
+        tencent.type = "tencent";
+        tencent.enabled = true;
+        tencent.weight = 55;
+        tencent.rankPageSize = 150;
+        tencent.limitUpPageSize = 0;
+        tencent.channels.add(defaultChannel("gainers", 12, "changepercent"));
+        tencent.channels.add(defaultChannel("amount", 22, "amount"));
+        tencent.channels.add(defaultChannel("turnover", 18, "turnoverratio"));
+        result.add(tencent);
     }
 
     private HotStockSourceChannelConfig defaultChannel(String id, int weight, String sortField) {

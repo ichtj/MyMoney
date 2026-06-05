@@ -15,6 +15,8 @@ public class HotStockSourceRegistry {
                 sources.add(new EastmoneyHotStockSource(config));
             } else if ("sina".equals(config.type)) {
                 sources.add(new SinaHotStockSource(config));
+            } else if ("tencent".equals(config.type)) {
+                sources.add(new TencentHotStockSource(config));
             } else {
                 android.util.Log.w("MyMoneyHotSources", "unsupported hot stock source type=" + config.type
                         + ", id=" + config.id);
