@@ -68,6 +68,39 @@ public class HotStockCandidateFetcher {
         int scoredCount = 0;
         int maxScore = Integer.MIN_VALUE;
         int minScore = Integer.MAX_VALUE;
+
+        // Collect candidates that pass the initial filter to enrich in parallel
+        ArrayList<HotStockCandidate> candidatesToEnrich = new ArrayList<HotStockCandidate>();
+        for (int i = 0; i < merged.size(); i++) {
+            HotStockCandidate candidate = merged.get(i);
+            if (getUniverseRejectReason(candidate) == null) {
+                candidatesToEnrich.add(candidate);
+            }
+        }
+
+        if (candidatesToEnrich.size() > 0) {
+            int threadCount = Math.min(12, candidatesToEnrich.size());
+            java.util.concurrent.ExecutorService klinePool = java.util.concurrent.Executors.newFixedThreadPool(threadCount);
+            ArrayList<java.util.concurrent.Future<?>> futures = new ArrayList<java.util.concurrent.Future<?>>();
+            for (int i = 0; i < candidatesToEnrich.size(); i++) {
+                final HotStockCandidate candidate = candidatesToEnrich.get(i);
+                futures.add(klinePool.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        enrichRecentFourDays(candidate);
+                    }
+                }));
+            }
+            for (int i = 0; i < futures.size(); i++) {
+                try {
+                    futures.get(i).get();
+                } catch (Exception e) {
+                    android.util.Log.w(TAG, "Parallel enrich interrupted/failed: " + e.getMessage());
+                }
+            }
+            klinePool.shutdown();
+        }
+
         for (int i = 0; i < merged.size(); i++) {
             HotStockCandidate candidate = merged.get(i);
             String universeRejectReason = getUniverseRejectReason(candidate);
@@ -76,7 +109,6 @@ public class HotStockCandidateFetcher {
                 continue;
             }
             universePassed++;
-            enrichRecentFourDays(candidate);
             if (!candidate.hasRecentKlineData) {
                 addRejectCount(rejectCounts, "kline_missing_soft");
             }

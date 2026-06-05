@@ -6,6 +6,12 @@ import java.util.regex.Pattern;
 public class SimpleWebPageFetcher {
     private static final String TAG = "MyMoneyCrawler";
     private static final int MAX_READ_BYTES = 512 * 1024;
+    private static final Pattern TITLE_PATTERN = Pattern.compile("<title[^>]*>(.*?)</title>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern SCRIPT_PATTERN = Pattern.compile("(?is)<script[^>]*>.*?</script>");
+    private static final Pattern STYLE_PATTERN = Pattern.compile("(?is)<style[^>]*>.*?</style>");
+    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("(?is)<[^>]+>");
+    private static final Pattern SPACES_PATTERN = Pattern.compile("\\s+");
+
     private final SimpleHttpClient httpClient = new SimpleHttpClient();
 
     public WebPageFetchResult fetch(WebPageSource source) {
@@ -40,7 +46,7 @@ public class SimpleWebPageFetcher {
     }
 
     private String extractTitle(String html) {
-        Matcher matcher = Pattern.compile("<title[^>]*>(.*?)</title>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(html);
+        Matcher matcher = TITLE_PATTERN.matcher(html);
         if (matcher.find()) {
             return cleanText(matcher.group(1));
         }
@@ -48,9 +54,9 @@ public class SimpleWebPageFetcher {
     }
 
     private String buildSnippet(String html) {
-        String cleaned = html.replaceAll("(?is)<script[^>]*>.*?</script>", " ")
-                .replaceAll("(?is)<style[^>]*>.*?</style>", " ")
-                .replaceAll("(?is)<[^>]+>", " ");
+        String cleaned = SCRIPT_PATTERN.matcher(html).replaceAll(" ");
+        cleaned = STYLE_PATTERN.matcher(cleaned).replaceAll(" ");
+        cleaned = HTML_TAG_PATTERN.matcher(cleaned).replaceAll(" ");
         cleaned = cleanText(cleaned);
         if (cleaned.length() > 280) {
             return cleaned.substring(0, 280);
@@ -59,12 +65,11 @@ public class SimpleWebPageFetcher {
     }
 
     private String cleanText(String value) {
-        return value.replace("&nbsp;", " ")
+        String res = value.replace("&nbsp;", " ")
                 .replace("&amp;", "&")
                 .replace("&lt;", "<")
                 .replace("&gt;", ">")
-                .replace("&quot;", "\"")
-                .replaceAll("\\s+", " ")
-                .trim();
+                .replace("&quot;", "\"");
+        return SPACES_PATTERN.matcher(res).replaceAll(" ").trim();
     }
 }
