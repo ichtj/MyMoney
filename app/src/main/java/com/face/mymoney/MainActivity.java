@@ -84,6 +84,9 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAB_PROFILE = "profile";
     private static final String NEWS_MODE_IMPORTANT = "important";
     private static final String NEWS_MODE_SUBSCRIBED = "subscribed";
+    private static final String HOT_STATUS_LATEST = "latest";
+    private static final String HOT_STATUS_CACHED = "cached";
+    private static final String HOT_STATUS_DEGRADED = "degraded";
     private static final long QUOTE_AUTO_REFRESH_MILLIS = 10000L;
     private static final long QUOTE_AUTO_REFRESH_IDLE_MILLIS = 5 * 60 * 1000L;
     private static final long DETAIL_CACHE_TTL_MILLIS = 15 * 60 * 1000L;
@@ -113,6 +116,9 @@ public class MainActivity extends AppCompatActivity {
     private boolean subscribedNewsLoadedOnce;
     private boolean refreshingQuotes;
     private boolean loadingHotCandidates;
+    private String hotDataStatus = "";
+    private long hotDataRefreshedAtMillis;
+    private String hotDataSourceSummary = "";
     private boolean homeEntryQuotesRefreshed;
     private HashMap<String, String> selectedNewsSources = new HashMap<String, String>();
     private HashMap<String, String> selectedOpinionSources = new HashMap<String, String>();
@@ -658,6 +664,8 @@ public class MainActivity extends AppCompatActivity {
                 ? "正在收集热度、资金、量价和4日趋势数据"
                 : "主板/创业板，排除688和50元以上，按热度、资金、活跃度和机会排序";
         titleBox.addView(text(subtitle, 13, COLOR_SUB, false), matchWrap());
+        titleBox.addView(spacer(4));
+        titleBox.addView(text(hotDataStatusText(), 13, hotDataStatusColor(), true), matchWrap());
         header.addView(titleBox, weightWrap(1));
         Button refresh = ghostButton(loadingHotCandidates ? "刷新中" : "刷新");
         refresh.setEnabled(!loadingHotCandidates);
@@ -693,6 +701,44 @@ public class MainActivity extends AppCompatActivity {
             page.addView(spacer(8));
         }
         return scrollView;
+    }
+
+    private String hotDataStatusText() {
+        if (loadingHotCandidates) {
+            return "正在获取最新数据";
+        }
+        String time = formatHotDataTime(hotDataRefreshedAtMillis);
+        String source = hotDataSourceSummary == null || hotDataSourceSummary.length() == 0
+                ? "来源未记录"
+                : hotDataSourceSummary;
+        if (HOT_STATUS_CACHED.equals(hotDataStatus)) {
+            return "使用缓存：" + time + "，" + source;
+        }
+        if (HOT_STATUS_DEGRADED.equals(hotDataStatus)) {
+            return "数据源不完整，实时结果仅供参考：" + time + "，" + source;
+        }
+        if (HOT_STATUS_LATEST.equals(hotDataStatus)) {
+            return "最新数据：" + time + "，" + source;
+        }
+        return "尚未刷新数据";
+    }
+
+    private int hotDataStatusColor() {
+        if (HOT_STATUS_CACHED.equals(hotDataStatus) || HOT_STATUS_DEGRADED.equals(hotDataStatus)) {
+            return Color.rgb(180, 83, 9);
+        }
+        if (HOT_STATUS_LATEST.equals(hotDataStatus)) {
+            return Color.rgb(22, 101, 52);
+        }
+        return COLOR_SUB;
+    }
+
+    private String formatHotDataTime(long millis) {
+        if (millis <= 0L) {
+            return "时间未知";
+        }
+        return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.CHINA)
+                .format(new java.util.Date(millis));
     }
 
     private View hotCandidateCard(final int rank, final HotStockCandidate candidate) {
@@ -1879,14 +1925,42 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 HotStockCandidateFetcher fetcher = new HotStockCandidateFetcher(MainActivity.this);
-                final ArrayList<HotStockCandidate> fetched = fetcher.fetchTop50HotStocks();
+                ArrayList<HotStockCandidate> fetchedResult = fetcher.fetchTop50HotStocks();
+                final boolean sourceDegraded = fetcher.isSourceDegraded();
+                final String sourceSummary = fetcher.getSourceSummary();
+                final boolean usingCachedHotCandidates;
+                if (sourceDegraded) {
+                    ArrayList<HotStockCandidate> cached = hotStockRepository.loadCandidates();
+                    if (cached.size() > 0) {
+                        fetchedResult = cached;
+                        usingCachedHotCandidates = true;
+                    } else {
+                        usingCachedHotCandidates = false;
+                    }
+                } else {
+                    usingCachedHotCandidates = false;
+                }
+                final ArrayList<HotStockCandidate> fetched = fetchedResult;
+                final long refreshedAtMillis = System.currentTimeMillis();
                 runOnUiIfAlive(new Runnable() {
                     @Override
                     public void run() {
                         loadingHotCandidates = false;
                         if (fetched.size() > 0) {
                             hotCandidates = fetched;
-                            hotStockRepository.saveCandidates(hotCandidates);
+                            if (!sourceDegraded) {
+                                hotStockRepository.saveCandidates(hotCandidates);
+                                hotDataStatus = HOT_STATUS_LATEST;
+                                hotDataRefreshedAtMillis = refreshedAtMillis;
+                                hotDataSourceSummary = sourceSummary;
+                                hotStockRepository.saveMeta(hotDataStatus, hotDataRefreshedAtMillis, hotDataSourceSummary);
+                            } else if (usingCachedHotCandidates) {
+                                hotDataStatus = HOT_STATUS_CACHED;
+                            } else {
+                                hotDataStatus = HOT_STATUS_DEGRADED;
+                                hotDataRefreshedAtMillis = refreshedAtMillis;
+                                hotDataSourceSummary = sourceSummary;
+                            }
                             syncHotCandidateBoardsToStocks(hotCandidates);
                         }
                         if (TAB_HOT.equals(currentTab) && currentStock == null) {
@@ -1894,9 +1968,16 @@ public class MainActivity extends AppCompatActivity {
                             showCurrentTab();
                         }
                         if (manual) {
-                            String message = fetched.size() > 0
-                                    ? "Top50热股刷新完成：" + fetched.size() + "只"
-                                    : "暂未抓到符合条件的热股";
+                            String message;
+                            if (usingCachedHotCandidates) {
+                                message = "数据源不完整，已使用缓存Top50";
+                            } else if (sourceDegraded && fetched.size() > 0) {
+                                message = "数据源不完整，结果仅供参考：" + fetched.size() + "只";
+                            } else {
+                                message = fetched.size() > 0
+                                        ? "Top50热股刷新完成：" + fetched.size() + "只"
+                                        : "暂未抓到符合条件的热股";
+                            }
                             Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
                         }
                     }
@@ -2008,6 +2089,13 @@ public class MainActivity extends AppCompatActivity {
         stocks = stockRepository.loadStocks();
         notes = stockRepository.loadNotes();
         hotCandidates = hotStockRepository.loadCandidates();
+        HotStockCandidateRepository.HotStockCandidateMeta hotMeta = hotStockRepository.loadMeta();
+        hotDataStatus = hotMeta.status;
+        hotDataRefreshedAtMillis = hotMeta.refreshedAtMillis;
+        hotDataSourceSummary = hotMeta.sourceSummary;
+        if (hotCandidates.size() > 0 && (hotDataStatus == null || hotDataStatus.length() == 0)) {
+            hotDataStatus = HOT_STATUS_CACHED;
+        }
         syncHotCandidateBoardsToStocks(hotCandidates);
     }
 

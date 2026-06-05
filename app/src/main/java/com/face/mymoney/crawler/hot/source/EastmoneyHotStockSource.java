@@ -16,6 +16,7 @@ public class EastmoneyHotStockSource implements HotStockSource {
     private static final int MAX_READ_BYTES = 512 * 1024;
     private static final int MAX_RETRY = 2;
     private static final String USER_AGENT = "Mozilla/5.0 MyMoneyBot/1.0";
+    private static final String REFERER = "https://quote.eastmoney.com/";
 
     private final SimpleHttpClient httpClient = new SimpleHttpClient();
     private final HotStockSourceConfig config;
@@ -42,11 +43,19 @@ public class EastmoneyHotStockSource implements HotStockSource {
             if (!channel.enabled) {
                 continue;
             }
+            int before = result.size();
             if ("limit_up_pool".equals(channel.id)) {
                 result.addAll(fetchLimitUpPool(channel));
             } else {
                 result.addAll(fetchRankChannel(channel));
             }
+            android.util.Log.d(TAG, "channel finish id=" + channel.id
+                    + ", added=" + (result.size() - before)
+                    + ", total=" + result.size());
+        }
+        if (result.size() == 0) {
+            android.util.Log.w(TAG, "source empty id=" + id()
+                    + ", enabledChannels=" + config.channels.size());
         }
         return result;
     }
@@ -62,10 +71,16 @@ public class EastmoneyHotStockSource implements HotStockSource {
                 + "&fs=" + fs
                 + "&fields=" + fields;
         try {
+            android.util.Log.d(TAG, "rank request channel=" + channel.id
+                    + ", sort=" + channel.sortField
+                    + ", url=" + url);
             SimpleHttpClient.HttpText response = getWithRetry(url, "rank", channel.id);
             if (!response.isHttpSuccess()) {
                 android.util.Log.w(TAG, "rank http failed channel=" + channel.id
-                        + ", status=" + response.statusCode + ", error=" + response.errorMessage);
+                        + ", status=" + response.statusCode
+                        + ", elapsed=" + response.elapsedMillis + "ms"
+                        + ", error=" + response.errorMessage
+                        + ", body=" + preview(response.body));
                 return result;
             }
             JSONObject data = new JSONObject(response.body).optJSONObject("data");
@@ -73,12 +88,16 @@ public class EastmoneyHotStockSource implements HotStockSource {
             if (array == null) {
                 android.util.Log.w(TAG, "rank empty array channel=" + channel.id
                         + ", status=" + response.statusCode
-                        + ", bodyLength=" + (response.body == null ? 0 : response.body.length()));
+                        + ", elapsed=" + response.elapsedMillis + "ms"
+                        + ", bodyLength=" + (response.body == null ? 0 : response.body.length())
+                        + ", body=" + preview(response.body));
                 return result;
             }
             android.util.Log.d(TAG, "rank response channel=" + channel.id
                     + ", rawCount=" + array.length()
-                    + ", pageSize=" + config.rankPageSize);
+                    + ", pageSize=" + config.rankPageSize
+                    + ", elapsed=" + response.elapsedMillis + "ms"
+                    + ", bodyLength=" + (response.body == null ? 0 : response.body.length()));
             for (int i = 0; i < array.length(); i++) {
                 JSONObject item = array.optJSONObject(i);
                 if (item != null) {
@@ -105,21 +124,27 @@ public class EastmoneyHotStockSource implements HotStockSource {
                 + "&Pageindex=0&pagesize=" + config.limitUpPageSize
                 + "&sort=fbt:asc";
         try {
+            android.util.Log.d(TAG, "limit pool request url=" + url);
             SimpleHttpClient.HttpText response = httpClient.get(url, TIMEOUT_MILLIS, MAX_READ_BYTES,
-                    "application/json,text/plain,*/*", USER_AGENT);
+                    "application/json,text/plain,*/*", USER_AGENT, REFERER);
             if (!response.isHttpSuccess()) {
                 android.util.Log.w(TAG, "limit pool http failed status=" + response.statusCode
-                        + ", error=" + response.errorMessage);
+                        + ", elapsed=" + response.elapsedMillis + "ms"
+                        + ", error=" + response.errorMessage
+                        + ", body=" + preview(response.body));
                 return result;
             }
             JSONObject data = new JSONObject(response.body).optJSONObject("data");
             JSONArray array = data == null ? null : data.optJSONArray("pool");
             if (array == null) {
                 android.util.Log.w(TAG, "limit pool empty array status=" + response.statusCode
-                        + ", bodyLength=" + (response.body == null ? 0 : response.body.length()));
+                        + ", elapsed=" + response.elapsedMillis + "ms"
+                        + ", bodyLength=" + (response.body == null ? 0 : response.body.length())
+                        + ", body=" + preview(response.body));
                 return result;
             }
-            android.util.Log.d(TAG, "limit pool response rawCount=" + array.length());
+            android.util.Log.d(TAG, "limit pool response rawCount=" + array.length()
+                    + ", elapsed=" + response.elapsedMillis + "ms");
             for (int i = 0; i < array.length(); i++) {
                 JSONObject item = array.optJSONObject(i);
                 if (item != null) {
@@ -204,7 +229,7 @@ public class EastmoneyHotStockSource implements HotStockSource {
         SimpleHttpClient.HttpText response = null;
         for (int attempt = 1; attempt <= MAX_RETRY; attempt++) {
             response = httpClient.get(url, TIMEOUT_MILLIS, MAX_READ_BYTES,
-                    "application/json,text/plain,*/*", USER_AGENT);
+                    "application/json,text/plain,*/*", USER_AGENT, REFERER);
             if (response.isHttpSuccess()) {
                 if (attempt > 1) {
                     android.util.Log.d(TAG, kind + " retry success channel=" + channelId
@@ -215,9 +240,19 @@ public class EastmoneyHotStockSource implements HotStockSource {
             android.util.Log.w(TAG, kind + " retry failed channel=" + channelId
                     + ", attempt=" + attempt
                     + ", status=" + response.statusCode
-                    + ", error=" + response.errorMessage);
+                    + ", elapsed=" + response.elapsedMillis + "ms"
+                    + ", error=" + response.errorMessage
+                    + ", body=" + preview(response.body));
         }
         return response;
+    }
+
+    private String preview(String text) {
+        if (text == null || text.length() == 0) {
+            return "";
+        }
+        String normalized = text.replace('\n', ' ').replace('\r', ' ').trim();
+        return normalized.length() > 200 ? normalized.substring(0, 200) : normalized;
     }
 
     private boolean isAllowedCode(String code) {

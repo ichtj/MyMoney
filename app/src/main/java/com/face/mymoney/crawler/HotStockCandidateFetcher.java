@@ -25,6 +25,9 @@ public class HotStockCandidateFetcher {
     private static final int TIMEOUT_MILLIS = 15000;
     private static final int MAX_READ_BYTES = 512 * 1024;
     private static final int TARGET_SIZE = 50;
+    private static final int MIN_KLINE_RANK_LIMIT = 30;
+    private static final int MAX_SINGLE_SOURCE_RESULT = 10;
+    private static final int MIN_HEALTHY_EASTMONEY_COUNT = 200;
     private static final double MAX_PRICE = 50d;
     private static final double MIN_EFFECTIVE_AMOUNT_YI = 1d;
     private static final double MIN_EFFECTIVE_TURNOVER = 2d;
@@ -32,12 +35,24 @@ public class HotStockCandidateFetcher {
 
     private final Context context;
     private final SimpleHttpClient httpClient = new SimpleHttpClient();
+    private boolean sourceDegraded;
+    private String sourceSummary = "";
 
     public HotStockCandidateFetcher(Context context) {
         this.context = context.getApplicationContext();
     }
 
+    public boolean isSourceDegraded() {
+        return sourceDegraded;
+    }
+
+    public String getSourceSummary() {
+        return sourceSummary;
+    }
+
     public ArrayList<HotStockCandidate> fetchTop50HotStocks() {
+        sourceDegraded = false;
+        sourceSummary = "";
         ArrayList<HotStockCandidate> merged = mergeSources();
         android.util.Log.d(TAG, "fetch start merged=" + merged.size());
         Collections.sort(merged, new Comparator<HotStockCandidate>() {
@@ -84,26 +99,117 @@ public class HotStockCandidateFetcher {
                 }
             }
         }
-        Collections.sort(filtered, new Comparator<HotStockCandidate>() {
-            @Override
-            public int compare(HotStockCandidate left, HotStockCandidate right) {
-                return right.totalScore - left.totalScore;
-            }
-        });
-        if (filtered.size() > TARGET_SIZE) {
-            return new ArrayList<HotStockCandidate>(filtered.subList(0, TARGET_SIZE));
-        }
+        ArrayList<HotStockCandidate> result = buildFinalResult(filtered);
         android.util.Log.d(TAG, "fetch finish merged=" + merged.size()
                 + ", universePassed=" + universePassed
                 + ", scored=" + scoredCount
-                + ", result=" + filtered.size()
+                + ", accepted=" + filtered.size()
+                + ", result=" + result.size()
+                + ", degraded=" + sourceDegraded
                 + ", minScore=" + (scoredCount == 0 ? "--" : String.valueOf(minScore))
                 + ", maxScore=" + (scoredCount == 0 ? "--" : String.valueOf(maxScore))
                 + ", rejects=" + rejectCounts);
-        if (filtered.size() == 0) {
+        logFinalRanks(result);
+        if (result.size() == 0) {
             logTopCandidates(merged, 12);
         }
-        return filtered;
+        return result;
+    }
+
+    private ArrayList<HotStockCandidate> buildFinalResult(ArrayList<HotStockCandidate> filtered) {
+        ArrayList<HotStockCandidate> sorted = new ArrayList<HotStockCandidate>(filtered);
+        Collections.sort(sorted, finalRankComparator());
+
+        ArrayList<HotStockCandidate> result = new ArrayList<HotStockCandidate>();
+        HashSet<String> selectedCodes = new HashSet<String>();
+        int[] singleSourceCount = new int[]{0};
+
+        addFinalCandidates(result, selectedCodes, sorted, true, singleSourceCount);
+        addFinalCandidates(result, selectedCodes, sorted, false, singleSourceCount);
+
+        android.util.Log.d(TAG, "rank_policy result=" + result.size()
+                + ", accepted=" + filtered.size()
+                + ", singleSource=" + countSingleSource(result)
+                + ", klineMissing=" + countMissingKline(result)
+                + ", maxSingleSource=" + MAX_SINGLE_SOURCE_RESULT
+                + ", minKlineRankLimit=" + MIN_KLINE_RANK_LIMIT);
+        return result;
+    }
+
+    private void addFinalCandidates(ArrayList<HotStockCandidate> result,
+                                    HashSet<String> selectedCodes,
+                                    ArrayList<HotStockCandidate> sorted,
+                                    boolean requireKline,
+                                    int[] singleSourceCount) {
+        for (int i = 0; i < sorted.size() && result.size() < TARGET_SIZE; i++) {
+            HotStockCandidate candidate = sorted.get(i);
+            if (selectedCodes.contains(candidate.code)) {
+                continue;
+            }
+            if (requireKline && !candidate.hasRecentKlineData) {
+                continue;
+            }
+            if (!requireKline && result.size() < MIN_KLINE_RANK_LIMIT) {
+                continue;
+            }
+            if (candidate.sourceCount <= 1 && singleSourceCount[0] >= MAX_SINGLE_SOURCE_RESULT) {
+                continue;
+            }
+            result.add(candidate);
+            selectedCodes.add(candidate.code);
+            if (candidate.sourceCount <= 1) {
+                singleSourceCount[0]++;
+            }
+        }
+    }
+
+    private Comparator<HotStockCandidate> finalRankComparator() {
+        return new Comparator<HotStockCandidate>() {
+            @Override
+            public int compare(HotStockCandidate left, HotStockCandidate right) {
+                int sourceCompare = sourcePriority(right) - sourcePriority(left);
+                if (sourceCompare != 0) {
+                    return sourceCompare;
+                }
+                int klineCompare = klinePriority(right) - klinePriority(left);
+                if (klineCompare != 0) {
+                    return klineCompare;
+                }
+                int scoreCompare = right.totalScore - left.totalScore;
+                if (scoreCompare != 0) {
+                    return scoreCompare;
+                }
+                return right.hotScore - left.hotScore;
+            }
+        };
+    }
+
+    private int sourcePriority(HotStockCandidate candidate) {
+        return candidate.sourceCount >= 2 ? 1 : 0;
+    }
+
+    private int klinePriority(HotStockCandidate candidate) {
+        return candidate.hasRecentKlineData ? 1 : 0;
+    }
+
+    private int countSingleSource(ArrayList<HotStockCandidate> candidates) {
+        int count = 0;
+        for (int i = 0; i < candidates.size(); i++) {
+            if (candidates.get(i).sourceCount <= 1) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private int countMissingKline(ArrayList<HotStockCandidate> candidates) {
+        int count = 0;
+        for (int i = 0; i < candidates.size(); i++) {
+            if (!candidates.get(i).hasRecentKlineData) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private ArrayList<HotStockCandidate> mergeSources() {
@@ -113,10 +219,12 @@ public class HotStockCandidateFetcher {
         HashMap<String, HashSet<String>> platformNames = new HashMap<String, HashSet<String>>();
         HashMap<String, HashSet<String>> channelNames = new HashMap<String, HashSet<String>>();
         ArrayList<HotStockSource> sources = new HotStockSourceRegistry().createSources(context);
+        HashMap<String, Integer> sourceCounts = new HashMap<String, Integer>();
         String today = new SimpleDateFormat("yyyy-MM-dd", Locale.CHINA).format(new Date());
         for (int i = 0; i < sources.size(); i++) {
             HotStockSource source = sources.get(i);
             ArrayList<HotStockSourceItem> items = source.fetch();
+            sourceCounts.put(source.id(), items.size());
             android.util.Log.d(TAG, "source=" + source.id() + ", count=" + items.size());
             for (int j = 0; j < items.size(); j++) {
                 HotStockSourceItem item = items.get(j);
@@ -158,6 +266,20 @@ public class HotStockCandidateFetcher {
                 }
                 addPlatformScore(platformChannelScores, platformWeights, platformNames, channelNames, item);
             }
+        }
+        Integer eastmoneyCount = sourceCounts.get("eastmoney");
+        Integer sinaCount = sourceCounts.get("sina");
+        sourceSummary = "东方财富" + (eastmoneyCount == null ? "--" : String.valueOf(eastmoneyCount))
+                + " / 新浪" + (sinaCount == null ? "--" : String.valueOf(sinaCount));
+        if (eastmoneyCount != null && sinaCount != null && sinaCount > 0
+                && eastmoneyCount < MIN_HEALTHY_EASTMONEY_COUNT) {
+            sourceDegraded = true;
+            android.util.Log.w(TAG, "source_degraded reason="
+                    + (eastmoneyCount == 0 ? "eastmoney_empty" : "eastmoney_low")
+                    + ", eastmoney=" + eastmoneyCount
+                    + ", sina=" + sinaCount
+                    + ", minHealthyEastmoney=" + MIN_HEALTHY_EASTMONEY_COUNT
+                    + ", sourceCounts=" + sourceCounts);
         }
         applyPlatformScores(byCode, platformChannelScores, platformWeights, platformNames, channelNames);
         return new ArrayList<HotStockCandidate>(byCode.values());
@@ -533,6 +655,12 @@ public class HotStockCandidateFetcher {
                 + ", twoDayLimitUp=" + candidate.recentTwoDayLimitUp
                 + ", sources=" + candidate.sourceCount
                 + ", channels=" + candidate.sourceChannelSummary);
+    }
+
+    private void logFinalRanks(ArrayList<HotStockCandidate> candidates) {
+        for (int i = 0; i < candidates.size(); i++) {
+            logCandidate("final_rank rank=" + (i + 1), candidates.get(i));
+        }
     }
 
     private String buildReason(HotStockCandidate candidate) {
