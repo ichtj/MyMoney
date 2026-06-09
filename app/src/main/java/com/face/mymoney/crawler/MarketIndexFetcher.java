@@ -17,6 +17,9 @@ public class MarketIndexFetcher {
 
     private final SimpleHttpClient httpClient = new SimpleHttpClient();
 
+    /**
+     * 获取defaultindices。
+     */
     public ArrayList<MarketIndexQuote> fetchDefaultIndices() {
         ArrayList<MarketIndexQuote> result = new ArrayList<MarketIndexQuote>();
         result.add(orEmpty(fetchChinaIndex("上证指数", "1.000001", "s_sh000001"), "上证指数"));
@@ -28,6 +31,9 @@ public class MarketIndexFetcher {
         return result;
     }
 
+    /**
+     * 获取china大盘指数。
+     */
     private MarketIndexQuote fetchChinaIndex(String name, String eastmoneySecId, String sinaSymbol) {
         MarketIndexQuote eastmoney = fetchEastmoneyIndex(name, eastmoneySecId);
         if (eastmoney != null) {
@@ -40,6 +46,9 @@ public class MarketIndexFetcher {
         return sina;
     }
 
+    /**
+     * 获取东方财富大盘指数。
+     */
     private MarketIndexQuote fetchEastmoneyIndex(String name, String secId) {
         String url = "https://push2.eastmoney.com/api/qt/stock/get?secid="
                 + secId + "&fields=f43,f58,f170";
@@ -69,6 +78,9 @@ public class MarketIndexFetcher {
         }
     }
 
+    /**
+     * 获取sinachina大盘指数。
+     */
     private MarketIndexQuote fetchSinaChinaIndex(String name, String symbol) {
         String url = "https://hq.sinajs.cn/list=" + symbol;
         try {
@@ -105,6 +117,9 @@ public class MarketIndexFetcher {
         }
     }
 
+    /**
+     * 获取yahoo大盘指数。
+     */
     private MarketIndexQuote fetchYahooIndex(String name, String symbol) {
         try {
             String encodedSymbol = URLEncoder.encode(symbol, "UTF-8");
@@ -143,10 +158,16 @@ public class MarketIndexFetcher {
         }
     }
 
+    /**
+     * orempty。
+     */
     private MarketIndexQuote orEmpty(MarketIndexQuote quote, String name) {
         return quote == null ? MarketIndexQuote.empty(name) : quote;
     }
 
+    /**
+     * 格式化scaled。
+     */
     private String formatScaled(Object value, int scale) {
         Double number = parseNumber(value);
         if (number == null) {
@@ -156,6 +177,9 @@ public class MarketIndexFetcher {
         return String.format(Locale.CHINA, "%." + scale + "f", number / divider);
     }
 
+    /**
+     * 格式化percent。
+     */
     private String formatPercent(Object value) {
         Double number = parseNumber(value);
         if (number == null) {
@@ -164,11 +188,17 @@ public class MarketIndexFetcher {
         return formatPercentValue(number / 100.0);
     }
 
+    /**
+     * 格式化percentvalue。
+     */
     private String formatPercentValue(double percent) {
         String prefix = percent > 0 ? "+" : "";
         return prefix + String.format(Locale.CHINA, "%.2f%%", percent);
     }
 
+    /**
+     * 解析number。
+     */
     private Double parseNumber(Object value) {
         if (value == null || JSONObject.NULL.equals(value)) {
             return null;

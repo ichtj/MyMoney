@@ -28,27 +28,45 @@ public class LocalStockRepository {
     private final Context context;
     private final SharedPreferences preferences;
 
+    /**
+     * 构造方法：创建 LocalStockRepository 实例。
+     */
     public LocalStockRepository(Context context) {
         this.context = context.getApplicationContext();
         preferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
     }
 
+    /**
+     * 获取all分组。
+     */
     public String getAllGroup() {
         return context.getString(R.string.group_all);
     }
 
+    /**
+     * 加载股票列表。
+     */
     public ArrayList<Stock> loadStocks() {
         return parseStocks(preferences.getString(KEY_STOCKS, "[]"));
     }
 
+    /**
+     * 加载决策笔记列表。
+     */
     public ArrayList<DecisionNote> loadNotes() {
         return parseNotes(preferences.getString(KEY_NOTES, "[]"));
     }
 
+    /**
+     * 加载saved分组列表。
+     */
     public ArrayList<String> loadSavedGroups() {
         return parseStringArray(preferences.getString(KEY_GROUPS, "[]"));
     }
 
+    /**
+     * 加载详情缓存。
+     */
     public DetailCache loadDetailCache(String stockCode) {
         String json = preferences.getString(detailCacheKey(stockCode), "");
         if (json.length() == 0) {
@@ -62,6 +80,9 @@ public class LocalStockRepository {
         }
     }
 
+    /**
+     * 保存详情缓存。
+     */
     public void saveDetailCache(DetailCache cache) {
         if (cache == null || cache.stockCode == null || cache.stockCode.length() == 0) {
             return;
@@ -69,6 +90,9 @@ public class LocalStockRepository {
         preferences.edit().putString(detailCacheKey(cache.stockCode), cache.toJson().toString()).apply();
     }
 
+    /**
+     * 清除详情analysis。
+     */
     public void clearDetailAnalysis(String stockCode) {
         DetailCache cache = loadDetailCache(stockCode);
         cache.stockCode = stockCode;
@@ -77,6 +101,9 @@ public class LocalStockRepository {
         saveDetailCache(cache);
     }
 
+    /**
+     * 保存股票列表。
+     */
     public void saveStocks(ArrayList<Stock> stocks) {
         JSONArray array = new JSONArray();
         for (int i = 0; i < stocks.size(); i++) {
@@ -85,6 +112,9 @@ public class LocalStockRepository {
         preferences.edit().putString(KEY_STOCKS, array.toString()).apply();
     }
 
+    /**
+     * 保存决策笔记列表。
+     */
     public void saveNotes(ArrayList<DecisionNote> notes) {
         JSONArray array = new JSONArray();
         for (int i = 0; i < notes.size(); i++) {
@@ -93,10 +123,16 @@ public class LocalStockRepository {
         preferences.edit().putString(KEY_NOTES, array.toString()).apply();
     }
 
+    /**
+     * 数据填充股票列表ifempty。
+     */
     public void seedStocksIfEmpty() {
         // Keep new installs empty. Users create their own watchlist and groups.
     }
 
+    /**
+     * 移除sample股票列表once。
+     */
     public void removeSampleStocksOnce() {
         if (preferences.getBoolean(KEY_SAMPLE_CLEANED, false)) {
             return;
@@ -121,6 +157,9 @@ public class LocalStockRepository {
         editor.apply();
     }
 
+    /**
+     * 保存分组ifneeded。
+     */
     public void saveGroupIfNeeded(String group) {
         String safeGroup = group == null ? "" : group.trim();
         if (safeGroup.length() == 0 || getAllGroup().equals(safeGroup)) {
@@ -133,6 +172,9 @@ public class LocalStockRepository {
         }
     }
 
+    /**
+     * createdefault股票。
+     */
     public Stock createDefaultStock(String code, String name, String group, String remark) {
         String safeGroup = group.length() == 0 ? getString(R.string.group_candidate) : group;
         String market = code.startsWith("6") ? getString(R.string.market_shanghai) : getString(R.string.market_shenzhen);
@@ -140,6 +182,9 @@ public class LocalStockRepository {
                 getString(R.string.pending_company_info_source), getString(R.string.pending_sync), getString(R.string.pending_sync), getString(R.string.pending_sync), getString(R.string.pending_risk_tag));
     }
 
+    /**
+     * 构建新闻资讯。
+     */
     public ArrayList<News> buildNews(Stock stock) {
         ArrayList<News> list = new ArrayList<News>();
         list.add(new News(getString(R.string.mock_news_title_format, stock.name), getString(R.string.mock_news_source_notice), getString(R.string.mock_news_today), stock.name, getString(R.string.mock_news_notice_content)));
@@ -148,6 +193,9 @@ public class LocalStockRepository {
         return list;
     }
 
+    /**
+     * 过滤股票列表。
+     */
     public ArrayList<Stock> filterStocks(ArrayList<Stock> stocks, String selectedGroup) {
         ArrayList<Stock> result = new ArrayList<Stock>();
         for (int i = 0; i < stocks.size(); i++) {
@@ -159,6 +207,9 @@ public class LocalStockRepository {
         return result;
     }
 
+    /**
+     * 获取分组列表。
+     */
     public ArrayList<String> getGroups(ArrayList<Stock> stocks) {
         ArrayList<String> groups = new ArrayList<String>();
         Set<String> exists = new HashSet<String>();
@@ -182,6 +233,9 @@ public class LocalStockRepository {
         return groups;
     }
 
+    /**
+     * 统计高风险股票列表。
+     */
     public int countRiskStocks(ArrayList<Stock> stocks) {
         int count = 0;
         for (int i = 0; i < stocks.size(); i++) {
@@ -192,6 +246,9 @@ public class LocalStockRepository {
         return count;
     }
 
+    /**
+     * 获取决策笔记列表。
+     */
     public ArrayList<DecisionNote> getNotes(ArrayList<DecisionNote> notes, String stockCode) {
         ArrayList<DecisionNote> result = new ArrayList<DecisionNote>();
         for (int i = 0; i < notes.size(); i++) {
@@ -202,6 +259,9 @@ public class LocalStockRepository {
         return result;
     }
 
+    /**
+     * sample股票。
+     */
     private Stock sampleStock(String code, String name, String market, String groupName, String remark,
                               String price, String change, String turnover, String industry, String business,
                               String marketValue, String pe, String revenue, String risk) {
@@ -224,24 +284,39 @@ public class LocalStockRepository {
         return stock;
     }
 
+    /**
+     * 获取字符串。
+     */
     private String getString(int resId) {
         return context.getString(resId);
     }
 
+    /**
+     * 获取字符串。
+     */
     private String getString(int resId, Object... args) {
         return context.getString(resId, args);
     }
 
+    /**
+     * 详情缓存key。
+     */
     private String detailCacheKey(String stockCode) {
         return KEY_DETAIL_CACHE_PREFIX + (stockCode == null ? "" : stockCode);
     }
 
+    /**
+     * 判断是否sample股票。
+     */
     private boolean isSampleStock(Stock stock) {
         return ("300308".equals(stock.code) && getString(R.string.sample_stock_zz_name).equals(stock.name))
                 || ("600519".equals(stock.code) && getString(R.string.sample_stock_mt_name).equals(stock.name))
                 || ("600776".equals(stock.code) && getString(R.string.sample_stock_df_name).equals(stock.name));
     }
 
+    /**
+     * 保存分组列表。
+     */
     private void saveGroups(ArrayList<String> groups) {
         JSONArray array = new JSONArray();
         for (int i = 0; i < groups.size(); i++) {
@@ -253,6 +328,9 @@ public class LocalStockRepository {
         preferences.edit().putString(KEY_GROUPS, array.toString()).apply();
     }
 
+    /**
+     * 解析股票列表。
+     */
     private ArrayList<Stock> parseStocks(String json) {
         ArrayList<Stock> list = new ArrayList<Stock>();
         try {
@@ -267,6 +345,9 @@ public class LocalStockRepository {
         return list;
     }
 
+    /**
+     * 解析决策笔记列表。
+     */
     private ArrayList<DecisionNote> parseNotes(String json) {
         ArrayList<DecisionNote> list = new ArrayList<DecisionNote>();
         try {
@@ -281,6 +362,9 @@ public class LocalStockRepository {
         return list;
     }
 
+    /**
+     * 解析字符串数组。
+     */
     private ArrayList<String> parseStringArray(String json) {
         ArrayList<String> list = new ArrayList<String>();
         try {

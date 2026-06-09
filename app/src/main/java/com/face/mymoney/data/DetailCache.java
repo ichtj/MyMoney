@@ -18,6 +18,9 @@ public class DetailCache {
     public ArrayList<Opinion> opinions = new ArrayList<Opinion>();
     public DeepSeekAnalysisResult analysis;
 
+    /**
+     * 转换为JSON。
+     */
     public JSONObject toJson() {
         JSONObject object = new JSONObject();
         try {
@@ -35,6 +38,9 @@ public class DetailCache {
         return object;
     }
 
+    /**
+     * 从JSON。
+     */
     public static DetailCache fromJson(JSONObject object) {
         DetailCache cache = new DetailCache();
         cache.stockCode = object.optString("stockCode", "");
@@ -50,6 +56,9 @@ public class DetailCache {
         return cache;
     }
 
+    /**
+     * 新闻资讯转换为JSON。
+     */
     private static JSONArray newsToJson(ArrayList<News> news) {
         JSONArray array = new JSONArray();
         for (int i = 0; i < news.size(); i++) {
@@ -58,6 +67,9 @@ public class DetailCache {
         return array;
     }
 
+    /**
+     * 舆情观点列表转换为JSON。
+     */
     private static JSONArray opinionsToJson(ArrayList<Opinion> opinions) {
         JSONArray array = new JSONArray();
         for (int i = 0; i < opinions.size(); i++) {
@@ -66,6 +78,9 @@ public class DetailCache {
         return array;
     }
 
+    /**
+     * 解析新闻资讯。
+     */
     private static ArrayList<News> parseNews(JSONArray array) {
         ArrayList<News> list = new ArrayList<News>();
         if (array == null) {
@@ -80,6 +95,9 @@ public class DetailCache {
         return list;
     }
 
+    /**
+     * 解析舆情观点列表。
+     */
     private static ArrayList<Opinion> parseOpinions(JSONArray array) {
         ArrayList<Opinion> list = new ArrayList<Opinion>();
         if (array == null) {

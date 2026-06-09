@@ -8,6 +8,9 @@ public class HotStockSourceChannelConfig {
     public int weight;
     public String sortField;
 
+    /**
+     * 从JSON。
+     */
     public static HotStockSourceChannelConfig fromJson(JSONObject object) {
         HotStockSourceChannelConfig config = new HotStockSourceChannelConfig();
         config.id = object.optString("id", "");

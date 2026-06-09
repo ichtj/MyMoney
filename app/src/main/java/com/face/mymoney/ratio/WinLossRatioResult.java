@@ -18,10 +18,16 @@ public class WinLossRatioResult {
     public final ArrayList<WinLossRatioContribution> contributions =
             new ArrayList<WinLossRatioContribution>();
 
+    /**
+     * 判断是否有显示盈亏期望比。
+     */
     public boolean hasDisplayRatio() {
         return opportunityPercent > 0 || riskPercent > 0;
     }
 
+    /**
+     * 应用scores。
+     */
     void applyScores(double opportunityScore, double riskScore) {
         double total = opportunityScore + riskScore;
         if (total <= 0d) {

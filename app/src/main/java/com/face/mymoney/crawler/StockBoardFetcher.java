@@ -18,6 +18,9 @@ public class StockBoardFetcher {
 
     private final SimpleHttpClient httpClient = new SimpleHttpClient();
 
+    /**
+     * 刷新boards。
+     */
     public int refreshBoards(ArrayList<Stock> stocks) {
         if (stocks == null || stocks.size() == 0) {
             return 0;
@@ -29,6 +32,9 @@ public class StockBoardFetcher {
         return updated;
     }
 
+    /**
+     * 刷新从东方财富列表。
+     */
     private int refreshFromEastmoneyList(ArrayList<Stock> stocks) {
         HashSet<String> pendingCodes = pendingCodes(stocks);
         if (pendingCodes.size() == 0) {
@@ -92,6 +98,9 @@ public class StockBoardFetcher {
         return updated;
     }
 
+    /**
+     * 刷新remaining从东方财富quote。
+     */
     private int refreshRemainingFromEastmoneyQuote(ArrayList<Stock> stocks) {
         int updated = 0;
         for (int i = 0; i < stocks.size(); i++) {
@@ -129,6 +138,9 @@ public class StockBoardFetcher {
         return updated;
     }
 
+    /**
+     * pendingcodes。
+     */
     private HashSet<String> pendingCodes(ArrayList<Stock> stocks) {
         HashSet<String> codes = new HashSet<String>();
         for (int i = 0; i < stocks.size(); i++) {
@@ -141,6 +153,9 @@ public class StockBoardFetcher {
         return codes;
     }
 
+    /**
+     * 更新股票行业。
+     */
     private boolean updateStockIndustry(ArrayList<Stock> stocks, String code, String industry, String source) {
         for (int i = 0; i < stocks.size(); i++) {
             Stock stock = stocks.get(i);
@@ -158,16 +173,25 @@ public class StockBoardFetcher {
         return false;
     }
 
+    /**
+     * secid。
+     */
     private String secId(String code) {
         String safeCode = code == null ? "" : code.trim();
         String market = safeCode.startsWith("6") || safeCode.startsWith("9") ? "1" : "0";
         return market + "." + safeCode;
     }
 
+    /**
+     * 有效/有用的行业。
+     */
     private boolean usefulIndustry(String value) {
         return hasUsefulIndustry(value);
     }
 
+    /**
+     * 判断是否有有效/有用的行业。
+     */
     private boolean hasUsefulIndustry(String value) {
         if (value == null) {
             return false;
@@ -180,6 +204,9 @@ public class StockBoardFetcher {
                 && !text.contains("寰呭悓姝");
     }
 
+    /**
+     * clean创建文本控件。
+     */
     private String cleanText(String value) {
         if (value == null) {
             return "";
@@ -188,6 +215,9 @@ public class StockBoardFetcher {
         return "-".equals(text) ? "" : text;
     }
 
+    /**
+     * 安全message。
+     */
     private String safeMessage(Exception e) {
         String message = e.getMessage();
         return message == null || message.length() == 0 ? "no detail" : message;

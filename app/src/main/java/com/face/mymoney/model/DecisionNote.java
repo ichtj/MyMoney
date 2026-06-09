@@ -14,6 +14,9 @@ public class DecisionNote {
     public String confidence;
     public String createdTime;
 
+    /**
+     * 转换为JSON。
+     */
     public JSONObject toJson() {
         JSONObject object = new JSONObject();
         try {
@@ -32,6 +35,9 @@ public class DecisionNote {
         return object;
     }
 
+    /**
+     * 从JSON。
+     */
     public static DecisionNote fromJson(JSONObject object) {
         DecisionNote note = new DecisionNote();
         note.id = object.optLong("id");

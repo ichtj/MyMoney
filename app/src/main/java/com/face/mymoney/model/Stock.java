@@ -20,6 +20,9 @@ public class Stock {
     public String profit;
     public String riskTag;
 
+    /**
+     * 转换为JSON。
+     */
     public JSONObject toJson() {
         JSONObject object = new JSONObject();
         try {
@@ -44,6 +47,9 @@ public class Stock {
         return object;
     }
 
+    /**
+     * 从JSON。
+     */
     public static Stock fromJson(JSONObject object) {
         Stock stock = new Stock();
         stock.code = object.optString("code");

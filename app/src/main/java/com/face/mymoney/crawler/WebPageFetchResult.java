@@ -10,6 +10,9 @@ public class WebPageFetchResult {
     public String errorMessage;
     public long elapsedMillis;
 
+    /**
+     * 错误。
+     */
     public static WebPageFetchResult error(WebPageSource source, String errorMessage, long elapsedMillis) {
         WebPageFetchResult result = new WebPageFetchResult();
         result.source = source;

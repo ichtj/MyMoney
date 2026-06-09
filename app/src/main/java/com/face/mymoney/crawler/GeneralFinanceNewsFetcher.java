@@ -20,6 +20,9 @@ public class GeneralFinanceNewsFetcher {
     private static final int MAX_PER_HTML_SOURCE = 8;
     private final SimpleHttpClient httpClient = new SimpleHttpClient();
 
+    /**
+     * 获取财经要闻新闻资讯。
+     */
     public ArrayList<News> fetchImportantNews() {
         ArrayList<News> news = new ArrayList<News>();
         android.util.Log.d(TAG, "fetchImportantNews start");
@@ -34,6 +37,9 @@ public class GeneralFinanceNewsFetcher {
         return news;
     }
 
+    /**
+     * 获取东方财富HTML。
+     */
     private void fetchEastmoneyHtml(ArrayList<News> target, String url, String sourceName) {
         android.util.Log.d(TAG, "fetchHtml start source=" + sourceName + ", url=" + url);
         SimpleHttpClient.HttpText response = httpClient.get(url, TIMEOUT_MILLIS, MAX_READ_BYTES,
@@ -51,6 +57,9 @@ public class GeneralFinanceNewsFetcher {
         parseHtmlLinks(target, response.body, sourceName, url);
     }
 
+    /**
+     * 解析HTMLlinks。
+     */
     private void parseHtmlLinks(ArrayList<News> target, String html, String sourceName, String baseUrl) {
         Matcher matcher = Pattern.compile("(?is)<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>").matcher(html);
         int seen = 0;
@@ -87,6 +96,9 @@ public class GeneralFinanceNewsFetcher {
                 + ", total=" + target.size());
     }
 
+    /**
+     * 获取article详情。
+     */
     private String fetchArticleDetail(String link) {
         if (link.length() == 0 || link.contains("quote.eastmoney.com")) {
             return "";
@@ -124,6 +136,9 @@ public class GeneralFinanceNewsFetcher {
         }
     }
 
+    /**
+     * 首个/第一个metacontent。
+     */
     private String firstMetaContent(String html) {
         Matcher matcher = Pattern.compile("(?is)<meta[^>]+(?:name|property)=[\"'](?:description|og:description)[\"'][^>]+content=[\"']([^\"']+)[\"'][^>]*>").matcher(html);
         if (matcher.find()) {
@@ -136,6 +151,9 @@ public class GeneralFinanceNewsFetcher {
         return "";
     }
 
+    /**
+     * 首个/第一个paragraphs。
+     */
     private String firstParagraphs(String html) {
         StringBuilder builder = new StringBuilder();
         Matcher matcher = Pattern.compile("(?is)<p[^>]*>(.*?)</p>").matcher(html);
@@ -152,11 +170,17 @@ public class GeneralFinanceNewsFetcher {
         return builder.toString();
     }
 
+    /**
+     * trim详情。
+     */
     private String trimDetail(String value) {
         String cleaned = cleanText(value);
         return cleaned.length() > 300 ? cleaned.substring(0, 300) + "..." : cleaned;
     }
 
+    /**
+     * 获取bingRSS订阅。
+     */
     private void fetchBingRss(ArrayList<News> target, String query) {
         if (target.size() >= MAX_TOTAL) {
             return;
@@ -191,6 +215,9 @@ public class GeneralFinanceNewsFetcher {
         }
     }
 
+    /**
+     * 解析RSS订阅。
+     */
     private void parseRss(ArrayList<News> target, String xml, String query) {
         Matcher matcher = Pattern.compile("(?is)<item\\b.*?</item>").matcher(xml);
         int seen = 0;
@@ -228,6 +255,9 @@ public class GeneralFinanceNewsFetcher {
                 + ", total=" + target.size());
     }
 
+    /**
+     * 判断是否财经要闻。
+     */
     private boolean isImportant(String title, String description) {
         String value = (title + " " + description).toLowerCase();
         if (title.length() < 6) {
@@ -240,6 +270,9 @@ public class GeneralFinanceNewsFetcher {
                 "政策", "监管", "关税", "制裁", "债券", "房地产", "能源", "芯片");
     }
 
+    /**
+     * 判断是否新闻资讯articlelink。
+     */
     private boolean isNewsArticleLink(String link) {
         if (link == null || link.length() == 0) {
             return false;
@@ -258,6 +291,9 @@ public class GeneralFinanceNewsFetcher {
                 || value.contains("finance.sina.com.cn");
     }
 
+    /**
+     * 判断是否市场quote标题。
+     */
     private boolean isMarketQuoteTitle(String title) {
         if (title == null) {
             return true;
@@ -275,6 +311,9 @@ public class GeneralFinanceNewsFetcher {
                 || value.contains("报价");
     }
 
+    /**
+     * 规范化URL。
+     */
     private String normalizeUrl(String baseUrl, String value) {
         if (value.startsWith("http://") || value.startsWith("https://")) {
             return value;
@@ -299,6 +338,9 @@ public class GeneralFinanceNewsFetcher {
         return baseUrl + value;
     }
 
+    /**
+     * containsany。
+     */
     private boolean containsAny(String value, String... keywords) {
         for (int i = 0; i < keywords.length; i++) {
             if (value.contains(keywords[i].toLowerCase())) {
@@ -308,6 +350,9 @@ public class GeneralFinanceNewsFetcher {
         return false;
     }
 
+    /**
+     * contains标题。
+     */
     private boolean containsTitle(ArrayList<News> news, String title) {
         for (int i = 0; i < news.size(); i++) {
             if (title.equals(news.get(i).title)) {
@@ -317,6 +362,9 @@ public class GeneralFinanceNewsFetcher {
         return false;
     }
 
+    /**
+     * 读取创建文本控件。
+     */
     private String readText(InputStream inputStream) throws Exception {
         if (inputStream == null) {
             return "";
@@ -339,6 +387,9 @@ public class GeneralFinanceNewsFetcher {
         return outputStream.toString("UTF-8");
     }
 
+    /**
+     * 创建标签控件value。
+     */
     private String tagValue(String xml, String tag) {
         Matcher matcher = Pattern.compile("(?is)<" + tag + "\\b[^>]*>(.*?)</" + tag + ">").matcher(xml);
         if (matcher.find()) {
@@ -347,16 +398,25 @@ public class GeneralFinanceNewsFetcher {
         return "";
     }
 
+    /**
+     * 去除标签。
+     */
     private String stripTags(String value) {
         return value.replaceAll("(?is)<[^>]+>", " ");
     }
 
+    /**
+     * clean创建文本控件。
+     */
     private String cleanText(String value) {
         return decodeEntities(value == null ? "" : value)
                 .replaceAll("\\s+", " ")
                 .trim();
     }
 
+    /**
+     * decodeentities。
+     */
     private String decodeEntities(String value) {
         return value.replace("<![CDATA[", "")
                 .replace("]]>", "")
@@ -368,11 +428,17 @@ public class GeneralFinanceNewsFetcher {
                 .replace("&#39;", "'");
     }
 
+    /**
+     * preview。
+     */
     private String preview(String value) {
         String cleaned = value == null ? "" : value.replaceAll("\\s+", " ").trim();
         return cleaned.length() > 120 ? cleaned.substring(0, 120) : cleaned;
     }
 
+    /**
+     * trim日志。
+     */
     private String trimLog(String value) {
         String cleaned = value == null ? "" : value.replaceAll("\\s+", " ").trim();
         return cleaned.length() > 80 ? cleaned.substring(0, 80) : cleaned;

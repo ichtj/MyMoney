@@ -23,20 +23,32 @@ public class TencentHotStockSource implements HotStockSource {
     private final SimpleHttpClient httpClient = new SimpleHttpClient();
     private final HotStockSourceConfig config;
 
+    /**
+     * 构造方法：创建 TencentHotStockSource 实例。
+     */
     public TencentHotStockSource(HotStockSourceConfig config) {
         this.config = config;
     }
 
+    /**
+     * id。
+     */
     @Override
     public String id() {
         return config.id;
     }
 
+    /**
+     * 权重。
+     */
     @Override
     public int weight() {
         return config.weight;
     }
 
+    /**
+     * 获取。
+     */
     @Override
     public ArrayList<HotStockSourceItem> fetch() {
         ArrayList<HotStockSourceItem> result = new ArrayList<HotStockSourceItem>();
@@ -65,6 +77,9 @@ public class TencentHotStockSource implements HotStockSource {
         return result;
     }
 
+    /**
+     * 获取数据填充codes。
+     */
     private ArrayList<SeedStock> fetchSeedCodes(HotStockSourceChannelConfig channel) {
         ArrayList<SeedStock> result = new ArrayList<SeedStock>();
         HashSet<String> seen = new HashSet<String>();
@@ -127,6 +142,9 @@ public class TencentHotStockSource implements HotStockSource {
         return result;
     }
 
+    /**
+     * 获取tencentquotes。
+     */
     private ArrayList<HotStockSourceItem> fetchTencentQuotes(ArrayList<SeedStock> seeds,
                                                              HotStockSourceChannelConfig channel) {
         ArrayList<HotStockSourceItem> result = new ArrayList<HotStockSourceItem>();
@@ -170,6 +188,9 @@ public class TencentHotStockSource implements HotStockSource {
         return result;
     }
 
+    /**
+     * 解析quoteresponse。
+     */
     private void parseQuoteResponse(String body,
                                     HashMap<String, String> seedNames,
                                     HotStockSourceChannelConfig channel,
@@ -214,6 +235,9 @@ public class TencentHotStockSource implements HotStockSource {
         }
     }
 
+    /**
+     * channelcomparator。
+     */
     private Comparator<HotStockSourceItem> channelComparator(final HotStockSourceChannelConfig channel) {
         return new Comparator<HotStockSourceItem>() {
             @Override
@@ -231,6 +255,9 @@ public class TencentHotStockSource implements HotStockSource {
         };
     }
 
+    /**
+     * channelmetric。
+     */
     private double channelMetric(HotStockSourceItem item, String channelId) {
         if ("amount".equals(channelId)) {
             return amountYi(item.amount);
@@ -241,6 +268,9 @@ public class TencentHotStockSource implements HotStockSource {
         return number(item.changePercent);
     }
 
+    /**
+     * 判断是否有效的。
+     */
     private boolean isValid(HotStockSourceItem item) {
         return item.code != null && item.code.length() == 6
                 && item.name != null && item.name.length() > 0
@@ -250,30 +280,48 @@ public class TencentHotStockSource implements HotStockSource {
                 && isAllowedCode(item.code);
     }
 
+    /**
+     * 判断是否有todaysignal。
+     */
     private boolean hasTodaySignal(HotStockSourceItem item) {
         return amountYi(item.amount) > 0d
                 || number(item.turnoverRate) > 0d
                 || number(item.changePercent) != 0d;
     }
 
+    /**
+     * 判断是否allowedcode。
+     */
     private boolean isAllowedCode(String code) {
         return (code.startsWith("00") || code.startsWith("30") || code.startsWith("60"))
                 && !code.startsWith("688");
     }
 
+    /**
+     * tencentsymbol。
+     */
     private String tencentSymbol(String code) {
         return (code.startsWith("6") || code.startsWith("9") ? "sh" : "sz") + code;
     }
 
+    /**
+     * 安全field。
+     */
     private String safeField(String[] fields, int index) {
         return index >= 0 && index < fields.length ? fields[index].trim() : "";
     }
 
+    /**
+     * 解析wanamount。
+     */
     private Double parseWanAmount(String value) {
         Double number = HotStockFormat.parseNumber(value);
         return number == null ? null : number * 10000d;
     }
 
+    /**
+     * amountyi。
+     */
     private double amountYi(String value) {
         Double number = HotStockFormat.parseNumber(value);
         if (number == null) {
@@ -288,6 +336,9 @@ public class TencentHotStockSource implements HotStockSource {
         return number / 100000000d;
     }
 
+    /**
+     * number。
+     */
     private double number(String value) {
         Double number = HotStockFormat.parseNumber(value);
         return number == null ? 0d : number;

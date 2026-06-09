@@ -14,20 +14,32 @@ public class DeepSeekAnalysisResult {
     private final HashMap<String, DeepSeekFactorResult> factors =
             new HashMap<String, DeepSeekFactorResult>();
 
+    /**
+     * 构造方法：创建 DeepSeekAnalysisResult 实例。
+     */
     private DeepSeekAnalysisResult(boolean success, String summary, String errorMessage) {
         this.success = success;
         this.summary = summary == null ? "" : summary;
         this.errorMessage = errorMessage == null ? "" : errorMessage;
     }
 
+    /**
+     * 成功结果。
+     */
     public static DeepSeekAnalysisResult success(String summary) {
         return new DeepSeekAnalysisResult(true, summary, "");
     }
 
+    /**
+     * 错误。
+     */
     public static DeepSeekAnalysisResult error(String errorMessage) {
         return new DeepSeekAnalysisResult(false, "", errorMessage);
     }
 
+    /**
+     * put因子。
+     */
     public DeepSeekAnalysisResult putFactor(DeepSeekFactorResult factor) {
         if (factor != null && factor.id.length() > 0) {
             factors.put(factor.id, factor);
@@ -35,19 +47,31 @@ public class DeepSeekAnalysisResult {
         return this;
     }
 
+    /**
+     * 获取因子。
+     */
     public DeepSeekFactorResult getFactor(String id) {
         return factors.get(id);
     }
 
+    /**
+     * 判断是否有可用的因子列表。
+     */
     public boolean hasUsableFactors() {
         return hasUsableFactor(FACTOR_INFO_CONSISTENCY) || hasUsableFactor(FACTOR_NEWS_SENTIMENT);
     }
 
+    /**
+     * 判断是否有可用的因子。
+     */
     public boolean hasUsableFactor(String id) {
         DeepSeekFactorResult factor = factors.get(id);
         return factor != null && factor.isUsable();
     }
 
+    /**
+     * blendedopportunitypercent。
+     */
     public int blendedOpportunityPercent() {
         int count = 0;
         int total = 0;
@@ -62,6 +86,9 @@ public class DeepSeekAnalysisResult {
         return count == 0 ? -1 : Math.round((float) total / (float) count);
     }
 
+    /**
+     * 转换为JSON。
+     */
     public JSONObject toJson() {
         JSONObject object = new JSONObject();
         try {
@@ -79,6 +106,9 @@ public class DeepSeekAnalysisResult {
         return object;
     }
 
+    /**
+     * 从JSON。
+     */
     public static DeepSeekAnalysisResult fromJson(JSONObject object) {
         boolean success = object.optBoolean("success", false);
         String summary = object.optString("summary", "");
@@ -92,6 +122,9 @@ public class DeepSeekAnalysisResult {
         return result;
     }
 
+    /**
+     * 添加因子。
+     */
     private static void addFactor(DeepSeekAnalysisResult result, JSONObject factors, String id) {
         JSONObject object = factors.optJSONObject(id);
         if (object != null) {
@@ -99,6 +132,9 @@ public class DeepSeekAnalysisResult {
         }
     }
 
+    /**
+     * 显示创建文本控件。
+     */
     public String displayText() {
         if (!success) {
             return errorMessage;
@@ -113,6 +149,9 @@ public class DeepSeekAnalysisResult {
         return builder.toString();
     }
 
+    /**
+     * append因子。
+     */
     private void appendFactor(StringBuilder builder, String name, DeepSeekFactorResult factor) {
         if (factor == null) {
             return;
@@ -130,6 +169,9 @@ public class DeepSeekAnalysisResult {
         builder.append(toDisplayText(factor.reason));
     }
 
+    /**
+     * 因子显示name。
+     */
     public static String factorDisplayName(String id) {
         if (FACTOR_INFO_CONSISTENCY.equals(id)) {
             return "信息一致性";
@@ -140,6 +182,9 @@ public class DeepSeekAnalysisResult {
         return "AI 分项";
     }
 
+    /**
+     * 转换为显示创建文本控件。
+     */
     private String toDisplayText(String value) {
         if (value == null) {
             return "";

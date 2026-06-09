@@ -23,6 +23,9 @@ public class WebPageSource {
     public String contentSelector;
     public String timeSelector;
 
+    /**
+     * 从JSON。
+     */
     public static WebPageSource fromJson(JSONObject object) throws JSONException {
         WebPageSource source = new WebPageSource();
         source.id = object.optString("id", "");
@@ -50,10 +53,16 @@ public class WebPageSource {
         return source;
     }
 
+    /**
+     * 判断是否有效的。
+     */
     public boolean isValid() {
         return id.length() > 0 && url.length() > 0;
     }
 
+    /**
+     * 解析for股票。
+     */
     public WebPageSource resolveForStock(Stock stock) {
         WebPageSource copy = copy();
         copy.url = url.replace("{stockCode}", encode(stock.code))
@@ -67,6 +76,9 @@ public class WebPageSource {
         return copy;
     }
 
+    /**
+     * 东方财富seccode。
+     */
     private String eastmoneySecCode(Stock stock) {
         String code = stock.code == null ? "" : stock.code.trim();
         if (code.startsWith("6")) {
@@ -81,6 +93,9 @@ public class WebPageSource {
         return code;
     }
 
+    /**
+     * 东方财富搜索param。
+     */
     private String eastmoneySearchParam(Stock stock) {
         String keyword = stock.name;
         if (stock.code != null && stock.code.length() > 0) {
@@ -89,6 +104,9 @@ public class WebPageSource {
         return eastmoneySearchParam(keyword);
     }
 
+    /**
+     * 东方财富搜索param。
+     */
     private String eastmoneySearchParam(String keyword) {
         return "{\"uid\":\"\",\"keyword\":\"" + escapeJson(keyword) + "\",\"type\":[\"cmsArticleWebOld\"],"
                 + "\"client\":\"web\",\"clientType\":\"web\",\"clientVersion\":\"curr\","
@@ -96,10 +114,16 @@ public class WebPageSource {
                 + "\"pageIndex\":1,\"pageSize\":20,\"preTag\":\"\",\"postTag\":\"\"}}}";
     }
 
+    /**
+     * escapeJSON。
+     */
     private String escapeJson(String value) {
         return (value == null ? "" : value).replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
+    /**
+     * copy。
+     */
     private WebPageSource copy() {
         WebPageSource source = new WebPageSource();
         source.id = id;
@@ -119,6 +143,9 @@ public class WebPageSource {
         return source;
     }
 
+    /**
+     * encode。
+     */
     private String encode(String value) {
         return Uri.encode(value == null ? "" : value);
     }

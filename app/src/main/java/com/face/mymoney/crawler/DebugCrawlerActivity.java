@@ -28,6 +28,9 @@ public class DebugCrawlerActivity extends AppCompatActivity {
     private TextView statusView;
     private volatile boolean running;
 
+    /**
+     * 当create时的回调处理。
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -35,6 +38,9 @@ public class DebugCrawlerActivity extends AppCompatActivity {
         setContentView(buildContent());
     }
 
+    /**
+     * 构建content。
+     */
     private View buildContent() {
         ScrollView scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(COLOR_BG);
@@ -80,6 +86,9 @@ public class DebugCrawlerActivity extends AppCompatActivity {
         return scrollView;
     }
 
+    /**
+     * 启动获取。
+     */
     private void startFetch() {
         if (running) {
             return;
@@ -111,6 +120,9 @@ public class DebugCrawlerActivity extends AppCompatActivity {
         }).start();
     }
 
+    /**
+     * 添加result。
+     */
     private void addResult(final WebPageFetchResult result) {
         runOnUiThread(new Runnable() {
             @Override
@@ -121,6 +133,9 @@ public class DebugCrawlerActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * result创建卡片布局。
+     */
     private View resultCard(WebPageFetchResult result) {
         LinearLayout card = ui.card();
         card.addView(ui.text(result.source.name, 17, COLOR_TEXT, true), ui.matchWrap());
@@ -144,6 +159,9 @@ public class DebugCrawlerActivity extends AppCompatActivity {
         return card;
     }
 
+    /**
+     * 更新status。
+     */
     private void updateStatus(final String value) {
         runOnUiThread(new Runnable() {
             @Override
@@ -153,6 +171,9 @@ public class DebugCrawlerActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 结束获取。
+     */
     private void finishFetch(final String value) {
         runOnUiThread(new Runnable() {
             @Override
@@ -164,6 +185,9 @@ public class DebugCrawlerActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * sleepquietly。
+     */
     private void sleepQuietly(int delayMillis) {
         try {
             Thread.sleep(delayMillis);

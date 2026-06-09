@@ -14,6 +14,9 @@ public class HotStockSourceConfig {
     public int limitUpPageSize;
     public ArrayList<HotStockSourceChannelConfig> channels = new ArrayList<HotStockSourceChannelConfig>();
 
+    /**
+     * 从JSON。
+     */
     public static HotStockSourceConfig fromJson(JSONObject object) {
         HotStockSourceConfig config = new HotStockSourceConfig();
         config.id = object.optString("id", "");

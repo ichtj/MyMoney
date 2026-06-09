@@ -7,6 +7,9 @@ import android.widget.TextView;
 
 public class PullRefreshScrollView extends ScrollView {
     public interface Listener {
+        /**
+         * 当刷新时的回调处理。
+         */
         void onRefresh();
     }
 

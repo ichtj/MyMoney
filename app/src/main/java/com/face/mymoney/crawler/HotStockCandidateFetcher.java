@@ -38,18 +38,30 @@ public class HotStockCandidateFetcher {
     private boolean sourceDegraded;
     private String sourceSummary = "";
 
+    /**
+     * 构造方法：创建 HotStockCandidateFetcher 实例。
+     */
     public HotStockCandidateFetcher(Context context) {
         this.context = context.getApplicationContext();
     }
 
+    /**
+     * 判断是否数据源degraded。
+     */
     public boolean isSourceDegraded() {
         return sourceDegraded;
     }
 
+    /**
+     * 获取数据源summary。
+     */
     public String getSourceSummary() {
         return sourceSummary;
     }
 
+    /**
+     * 获取top50hot股票列表。
+     */
     public ArrayList<HotStockCandidate> fetchTop50HotStocks() {
         sourceDegraded = false;
         sourceSummary = "";
@@ -148,6 +160,9 @@ public class HotStockCandidateFetcher {
         return result;
     }
 
+    /**
+     * 构建finalresult。
+     */
     private ArrayList<HotStockCandidate> buildFinalResult(ArrayList<HotStockCandidate> filtered) {
         ArrayList<HotStockCandidate> sorted = new ArrayList<HotStockCandidate>(filtered);
         Collections.sort(sorted, finalRankComparator());
@@ -174,6 +189,9 @@ public class HotStockCandidateFetcher {
         return result;
     }
 
+    /**
+     * 添加final候选股票列表。
+     */
     private void addFinalCandidates(ArrayList<HotStockCandidate> result,
                                     HashSet<String> selectedCodes,
                                     ArrayList<HotStockCandidate> sorted,
@@ -201,6 +219,9 @@ public class HotStockCandidateFetcher {
         }
     }
 
+    /**
+     * finalrankcomparator。
+     */
     private Comparator<HotStockCandidate> finalRankComparator() {
         return new Comparator<HotStockCandidate>() {
             @Override
@@ -222,14 +243,23 @@ public class HotStockCandidateFetcher {
         };
     }
 
+    /**
+     * 数据源priority。
+     */
     private int sourcePriority(HotStockCandidate candidate) {
         return candidate.sourceCount >= 2 ? 1 : 0;
     }
 
+    /**
+     * klinepriority。
+     */
     private int klinePriority(HotStockCandidate candidate) {
         return candidate.hasRecentKlineData ? 1 : 0;
     }
 
+    /**
+     * 统计single数据源。
+     */
     private int countSingleSource(ArrayList<HotStockCandidate> candidates) {
         int count = 0;
         for (int i = 0; i < candidates.size(); i++) {
@@ -240,6 +270,9 @@ public class HotStockCandidateFetcher {
         return count;
     }
 
+    /**
+     * 统计缺失的kline。
+     */
     private int countMissingKline(ArrayList<HotStockCandidate> candidates) {
         int count = 0;
         for (int i = 0; i < candidates.size(); i++) {
@@ -250,6 +283,9 @@ public class HotStockCandidateFetcher {
         return count;
     }
 
+    /**
+     * 统计recentkline。
+     */
     private int countRecentKline(ArrayList<HotStockCandidate> candidates) {
         int count = 0;
         for (int i = 0; i < candidates.size(); i++) {
@@ -260,6 +296,9 @@ public class HotStockCandidateFetcher {
         return count;
     }
 
+    /**
+     * merge数据源列表。
+     */
     private ArrayList<HotStockCandidate> mergeSources() {
         HashMap<String, HotStockCandidate> byCode = new HashMap<String, HotStockCandidate>();
         HashMap<String, HashMap<String, Integer>> platformChannelScores = new HashMap<String, HashMap<String, Integer>>();
@@ -336,6 +375,9 @@ public class HotStockCandidateFetcher {
         return new ArrayList<HotStockCandidate>(byCode.values());
     }
 
+    /**
+     * 日志merged数据源stats。
+     */
     private void logMergedSourceStats(HashMap<String, HotStockCandidate> byCode) {
         int source1 = 0;
         int source2 = 0;
@@ -362,6 +404,9 @@ public class HotStockCandidateFetcher {
                 + ", tencentTouched=" + tencentTouched);
     }
 
+    /**
+     * 添加platformscore。
+     */
     private void addPlatformScore(HashMap<String, HashMap<String, Integer>> platformChannelScores,
                                   HashMap<String, HashMap<String, Integer>> platformWeights,
                                   HashMap<String, HashSet<String>> platformNames,
@@ -401,6 +446,9 @@ public class HotStockCandidateFetcher {
         }
     }
 
+    /**
+     * 应用platformscores。
+     */
     private void applyPlatformScores(HashMap<String, HotStockCandidate> byCode,
                                      HashMap<String, HashMap<String, Integer>> platformChannelScores,
                                      HashMap<String, HashMap<String, Integer>> platformWeights,
@@ -433,6 +481,9 @@ public class HotStockCandidateFetcher {
         }
     }
 
+    /**
+     * joinnames。
+     */
     private String joinNames(HashSet<String> names) {
         if (names == null || names.size() == 0) {
             return "";
@@ -450,6 +501,9 @@ public class HotStockCandidateFetcher {
         return builder.toString();
     }
 
+    /**
+     * fill缺失的。
+     */
     private void fillMissing(HotStockCandidate candidate, HotStockSourceItem item) {
         if (isEmptyValue(candidate.industry)) {
             candidate.industry = emptyToDash(item.industry);
@@ -477,6 +531,9 @@ public class HotStockCandidateFetcher {
         }
     }
 
+    /**
+     * enrichrecentfourdays。
+     */
     private void enrichRecentFourDays(HotStockCandidate candidate) {
         String url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
                 + "?secid=" + secId(candidate.code)
@@ -559,6 +616,9 @@ public class HotStockCandidateFetcher {
         }
     }
 
+    /**
+     * score。
+     */
     private void score(HotStockCandidate candidate) {
         double change = parsePercent(candidate.changePercent);
         double fourDayChange = parsePercent(candidate.fourDayChangePercent);
@@ -642,6 +702,9 @@ public class HotStockCandidateFetcher {
         candidate.reason = buildReason(candidate);
     }
 
+    /**
+     * 获取universerejectreason。
+     */
     private String getUniverseRejectReason(HotStockCandidate candidate) {
         String code = candidate.code == null ? "" : candidate.code.trim();
         if (!(code.startsWith("00") || code.startsWith("30") || code.startsWith("60"))) {
@@ -663,6 +726,9 @@ public class HotStockCandidateFetcher {
         return null;
     }
 
+    /**
+     * 获取enrichedrejectreason。
+     */
     private String getEnrichedRejectReason(HotStockCandidate candidate) {
         if (candidate.recentTwoDayLimitUp) {
             return "two_day_limit_up";
@@ -675,15 +741,24 @@ public class HotStockCandidateFetcher {
         return null;
     }
 
+    /**
+     * acceptthreshold。
+     */
     private int acceptThreshold(HotStockCandidate candidate) {
         return candidate.hasRecentKlineData ? 55 : 45;
     }
 
+    /**
+     * 添加reject统计。
+     */
     private void addRejectCount(HashMap<String, Integer> rejectCounts, String reason) {
         Integer count = rejectCounts.get(reason);
         rejectCounts.put(reason, count == null ? 1 : count + 1);
     }
 
+    /**
+     * 日志置顶候选股票列表。
+     */
     private void logTopCandidates(ArrayList<HotStockCandidate> candidates, int maxCount) {
         int count = Math.min(maxCount, candidates.size());
         for (int i = 0; i < count; i++) {
@@ -705,6 +780,9 @@ public class HotStockCandidateFetcher {
         }
     }
 
+    /**
+     * 日志候选股票。
+     */
     private void logCandidate(String stage, HotStockCandidate candidate) {
         android.util.Log.d(TAG, stage + " code=" + candidate.code
                 + ", name=" + candidate.name
@@ -734,12 +812,18 @@ public class HotStockCandidateFetcher {
                 + ", channels=" + candidate.sourceChannelSummary);
     }
 
+    /**
+     * 日志finalranks。
+     */
     private void logFinalRanks(ArrayList<HotStockCandidate> candidates) {
         for (int i = 0; i < candidates.size(); i++) {
             logCandidate("final_rank rank=" + (i + 1), candidates.get(i));
         }
     }
 
+    /**
+     * 构建reason。
+     */
     private String buildReason(HotStockCandidate candidate) {
         return "阶段：" + emptyToDefault(candidate.stageTag, "--")
                 + "，来源质量：" + emptyToDefault(candidate.sourceQualityTag, "--")
@@ -753,6 +837,9 @@ public class HotStockCandidateFetcher {
                 + "，综合评分" + candidate.totalScore;
     }
 
+    /**
+     * 构建高风险创建标签控件。
+     */
     private String buildRiskTag(HotStockCandidate candidate) {
         if (candidate.name != null && candidate.name.toUpperCase(Locale.US).contains("ST")) {
             return "ST风险";
@@ -775,6 +862,9 @@ public class HotStockCandidateFetcher {
         return "观察波动";
     }
 
+    /**
+     * 高风险deduct。
+     */
     private int riskDeduct(HotStockCandidate candidate) {
         if (candidate.name != null && candidate.name.toUpperCase(Locale.US).contains("ST")) {
             return 100;
@@ -810,6 +900,9 @@ public class HotStockCandidateFetcher {
         return deduct;
     }
 
+    /**
+     * 构建stage创建标签控件。
+     */
     private String buildStageTag(HotStockCandidate candidate) {
         if (!candidate.hasRecentKlineData) {
             return "行情待确认";
@@ -830,6 +923,9 @@ public class HotStockCandidateFetcher {
         return "启动观察";
     }
 
+    /**
+     * 构建数据源quality创建标签控件。
+     */
     private String buildSourceQualityTag(HotStockCandidate candidate) {
         if (isHighQualitySource(candidate)) {
             return "成交换手共振";
@@ -843,30 +939,48 @@ public class HotStockCandidateFetcher {
         return "单来源观察";
     }
 
+    /**
+     * 判断是否highquality数据源。
+     */
     private boolean isHighQualitySource(HotStockCandidate candidate) {
         String channels = candidate.sourceChannelSummary == null ? "" : candidate.sourceChannelSummary;
         return channels.contains("amount") && channels.contains("turnover");
     }
 
+    /**
+     * 判断是否gainersonly数据源。
+     */
     private boolean isGainersOnlySource(HotStockCandidate candidate) {
         String channels = candidate.sourceChannelSummary == null ? "" : candidate.sourceChannelSummary;
         return channels.contains("gainers") && !channels.contains("amount") && !channels.contains("turnover");
     }
 
+    /**
+     * limitupdistance。
+     */
     private double limitUpDistance(HotStockCandidate candidate) {
         return limitUpThreshold(candidate.code) - parsePercent(candidate.changePercent);
     }
 
+    /**
+     * 判断是否hard高风险。
+     */
     private boolean isHardRisk(HotStockCandidate candidate) {
         return candidate.name != null && candidate.name.toUpperCase(Locale.US).contains("ST");
     }
 
+    /**
+     * secid。
+     */
     private String secId(String code) {
         String safeCode = code == null ? "" : code.trim();
         String market = safeCode.startsWith("6") || safeCode.startsWith("9") ? "1" : "0";
         return market + "." + safeCode;
     }
 
+    /**
+     * limitupthreshold。
+     */
     private double limitUpThreshold(String code) {
         if (code != null && (code.startsWith("300") || code.startsWith("301"))) {
             return 19.5d;
@@ -874,6 +988,9 @@ public class HotStockCandidateFetcher {
         return 9.5d;
     }
 
+    /**
+     * 解析number。
+     */
     private Double parseNumber(Object value) {
         if (value == null || JSONObject.NULL.equals(value)) {
             return null;
@@ -893,19 +1010,31 @@ public class HotStockCandidateFetcher {
         }
     }
 
+    /**
+     * numberorzero。
+     */
     private double numberOrZero(Double value) {
         return value == null ? 0d : value;
     }
 
+    /**
+     * 解析安全。
+     */
     private double parseSafe(String value) {
         Double number = parseNumber(value);
         return number == null ? 0d : number;
     }
 
+    /**
+     * 解析percent。
+     */
     private double parsePercent(String value) {
         return parseSafe(value);
     }
 
+    /**
+     * 解析amountyi。
+     */
     private double parseAmountYi(String value) {
         if (value == null) {
             return 0d;
@@ -923,10 +1052,16 @@ public class HotStockCandidateFetcher {
         return number / 100000000d;
     }
 
+    /**
+     * empty转换为dash。
+     */
     private String emptyToDash(String value) {
         return emptyToDefault(value, "--");
     }
 
+    /**
+     * empty转换为default。
+     */
     private String emptyToDefault(String value, String fallback) {
         if (value == null || value.trim().length() == 0 || "-".equals(value.trim())) {
             return fallback;
@@ -934,10 +1069,16 @@ public class HotStockCandidateFetcher {
         return value.trim();
     }
 
+    /**
+     * 判断是否emptyvalue。
+     */
     private boolean isEmptyValue(String value) {
         return value == null || value.length() == 0 || "--".equals(value);
     }
 
+    /**
+     * clamp。
+     */
     private int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }

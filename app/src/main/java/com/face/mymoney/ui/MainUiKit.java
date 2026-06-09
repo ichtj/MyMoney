@@ -24,22 +24,34 @@ public class MainUiKit {
 
     private final Context context;
 
+    /**
+     * 构造方法：创建 MainUiKit 实例。
+     */
     public MainUiKit(Context context) {
         this.context = context;
     }
 
+    /**
+     * 创建垂直布局。
+     */
     public LinearLayout vertical() {
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
         return layout;
     }
 
+    /**
+     * 创建水平布局。
+     */
     public LinearLayout horizontal() {
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.HORIZONTAL);
         return layout;
     }
 
+    /**
+     * 创建卡片布局。
+     */
     public LinearLayout card() {
         LinearLayout layout = vertical();
         layout.setPadding(dp(16), dp(16), dp(16), dp(16));
@@ -47,6 +59,9 @@ public class MainUiKit {
         return layout;
     }
 
+    /**
+     * 创建文本控件。
+     */
     public TextView text(String value, int sp, int color, boolean bold) {
         TextView view = new TextView(context);
         view.setText(value);
@@ -59,6 +74,9 @@ public class MainUiKit {
         return view;
     }
 
+    /**
+     * 创建标签控件。
+     */
     public TextView tag(String value, int bgColor, int textColor) {
         TextView view = text(value, 12, textColor, true);
         view.setGravity(Gravity.CENTER);
@@ -67,6 +85,9 @@ public class MainUiKit {
         return view;
     }
 
+    /**
+     * 创建输入框控件。
+     */
     public EditText input(String hint) {
         EditText editText = new EditText(context);
         editText.setHint(hint);
@@ -79,6 +100,9 @@ public class MainUiKit {
         return editText;
     }
 
+    /**
+     * 主要按钮。
+     */
     public Button primaryButton(String text) {
         Button button = new Button(context);
         button.setAllCaps(false);
@@ -90,6 +114,9 @@ public class MainUiKit {
         return button;
     }
 
+    /**
+     * 幽灵风格按钮。
+     */
     public Button ghostButton(String text) {
         Button button = new Button(context);
         button.setAllCaps(false);
@@ -100,6 +127,9 @@ public class MainUiKit {
         return button;
     }
 
+    /**
+     * 创建圆角背景。
+     */
     public GradientDrawable rounded(int color, int radius) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);
@@ -107,52 +137,85 @@ public class MainUiKit {
         return drawable;
     }
 
+    /**
+     * 创建圆角背景描边。
+     */
     public GradientDrawable roundedStroke(int color, int radius, int strokeColor) {
         GradientDrawable drawable = rounded(color, radius);
         drawable.setStroke(dp(1), strokeColor);
         return drawable;
     }
 
+    /**
+     * 创建间距控件。
+     */
     public View spacer(int height) {
         View view = new View(context);
         view.setLayoutParams(new LinearLayout.LayoutParams(1, height));
         return view;
     }
 
+    /**
+     * 创建间距控件。
+     */
     public View spacer(int width, int height) {
         View view = new View(context);
         view.setLayoutParams(new LinearLayout.LayoutParams(width, height));
         return view;
     }
 
+    /**
+     * 创建权重间距权重。
+     */
     public View spaceWeight() {
         return new View(context);
     }
 
+    /**
+     * 填充包裹。
+     */
     public LinearLayout.LayoutParams matchWrap() {
         return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
+    /**
+     * 填充高度。
+     */
     public LinearLayout.LayoutParams matchHeight(int height) {
         return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height);
     }
 
+    /**
+     * 包裹高度。
+     */
     public LinearLayout.LayoutParams wrapHeight(int height) {
         return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, height);
     }
 
+    /**
+     * 包裹包裹。
+     */
     public LinearLayout.LayoutParams wrapWrap() {
         return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
+    /**
+     * 权重包裹。
+     */
     public LinearLayout.LayoutParams weightWrap(float weight) {
         return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, weight);
     }
 
+    /**
+     * 填充填充。
+     */
     public FrameLayout.LayoutParams matchMatch() {
         return new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
     }
 
+    /**
+     * 页面布局参数。
+     */
     public FrameLayout.LayoutParams pageParams(boolean detailPage) {
         int screenWidth = context.getResources().getDisplayMetrics().widthPixels;
         int maxWidth = detailPage ? ResponsiveMetrics.maxDetailPageWidth(context) : ResponsiveMetrics.maxPageWidth(context);
@@ -162,10 +225,16 @@ public class MainUiKit {
         return params;
     }
 
+    /**
+     * 将dp值转换为像素值。
+     */
     public int dp(int value) {
         return ResponsiveMetrics.dp(context, value);
     }
 
+    /**
+     * 隐藏键盘。
+     */
     public void hideKeyboard(View view) {
         InputMethodManager manager = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
         if (manager != null) {

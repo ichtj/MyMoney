@@ -10,6 +10,9 @@ public class Opinion {
     public String content;
     public String url;
 
+    /**
+     * 构造方法：创建 Opinion 实例。
+     */
     public Opinion(String title, String source, String time, String keyword, String content, String url) {
         this.title = title;
         this.source = source;
@@ -19,6 +22,9 @@ public class Opinion {
         this.url = url;
     }
 
+    /**
+     * 转换为JSON。
+     */
     public JSONObject toJson() {
         JSONObject object = new JSONObject();
         try {
@@ -33,6 +39,9 @@ public class Opinion {
         return object;
     }
 
+    /**
+     * 从JSON。
+     */
     public static Opinion fromJson(JSONObject object) {
         return new Opinion(
                 object.optString("title", ""),

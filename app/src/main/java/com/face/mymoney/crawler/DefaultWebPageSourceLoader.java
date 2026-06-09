@@ -15,14 +15,23 @@ public class DefaultWebPageSourceLoader {
 
     private final Context context;
 
+    /**
+     * 构造方法：创建 DefaultWebPageSourceLoader 实例。
+     */
     public DefaultWebPageSourceLoader(Context context) {
         this.context = context.getApplicationContext();
     }
 
+    /**
+     * 加载default数据源列表。
+     */
     public ArrayList<WebPageSource> loadDefaultSources() {
         return parseSources(readAsset(DEFAULT_ASSET_NAME));
     }
 
+    /**
+     * 加载启用的数据源列表。
+     */
     public ArrayList<WebPageSource> loadEnabledSources() {
         ArrayList<WebPageSource> allSources = loadDefaultSources();
         ArrayList<WebPageSource> enabledSources = new ArrayList<WebPageSource>();
@@ -35,6 +44,9 @@ public class DefaultWebPageSourceLoader {
         return enabledSources;
     }
 
+    /**
+     * 加载数据源列表根据category。
+     */
     public ArrayList<WebPageSource> loadSourcesByCategory(String category) {
         ArrayList<WebPageSource> allSources = loadDefaultSources();
         ArrayList<WebPageSource> result = new ArrayList<WebPageSource>();
@@ -47,6 +59,9 @@ public class DefaultWebPageSourceLoader {
         return result;
     }
 
+    /**
+     * 解析数据源列表。
+     */
     private ArrayList<WebPageSource> parseSources(String json) {
         ArrayList<WebPageSource> sources = new ArrayList<WebPageSource>();
         try {
@@ -63,6 +78,9 @@ public class DefaultWebPageSourceLoader {
         return sources;
     }
 
+    /**
+     * 读取Assets静态资源。
+     */
     private String readAsset(String assetName) {
         InputStream inputStream = null;
         try {

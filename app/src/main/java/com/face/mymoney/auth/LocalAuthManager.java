@@ -14,15 +14,24 @@ public class LocalAuthManager {
     private final SharedPreferences preferences;
     private final Context context;
 
+    /**
+     * 构造方法：创建 LocalAuthManager 实例。
+     */
     public LocalAuthManager(Context context) {
         this.context = context.getApplicationContext();
         preferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
     }
 
+    /**
+     * 判断是否loggedin。
+     */
     public boolean isLoggedIn() {
         return preferences.getString(KEY_TOKEN, "").length() > 0;
     }
 
+    /**
+     * 登录。
+     */
     public void login(String account) {
         preferences.edit()
                 .putString(KEY_USER, account)
@@ -30,14 +39,23 @@ public class LocalAuthManager {
                 .apply();
     }
 
+    /**
+     * logout。
+     */
     public void logout() {
         preferences.edit().remove(KEY_TOKEN).apply();
     }
 
+    /**
+     * 获取用户name。
+     */
     public String getUserName() {
         return preferences.getString(KEY_USER, context.getString(R.string.local_user));
     }
 
+    /**
+     * 更新个人中心。
+     */
     public void updateProfile(String userName, int avatarStyle) {
         preferences.edit()
                 .putString(KEY_USER, userName)
@@ -45,6 +63,9 @@ public class LocalAuthManager {
                 .apply();
     }
 
+    /**
+     * 获取头像样式。
+     */
     public int getAvatarStyle() {
         return preferences.getInt(KEY_AVATAR_STYLE, 0);
     }

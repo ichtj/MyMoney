@@ -9,6 +9,9 @@ import java.util.ArrayList;
 public class WinLossRatioCalculator {
     private final ArrayList<WinLossRatioFactor> factors = new ArrayList<WinLossRatioFactor>();
 
+    /**
+     * 构造方法：创建 WinLossRatioCalculator 实例。
+     */
     public WinLossRatioCalculator() {
         factors.add(new PricePlanFactor(0.25d));
         factors.add(new AiSubFactor(DeepSeekAnalysisResult.FACTOR_INFO_CONSISTENCY,
@@ -18,6 +21,9 @@ public class WinLossRatioCalculator {
         factors.add(new LimitApproachFactor(0.25d));
     }
 
+    /**
+     * 添加因子。
+     */
     public WinLossRatioCalculator addFactor(WinLossRatioFactor factor) {
         if (factor != null) {
             factors.add(factor);
@@ -25,6 +31,9 @@ public class WinLossRatioCalculator {
         return this;
     }
 
+    /**
+     * 计算。
+     */
     public WinLossRatioResult calculate(WinLossRatioInput input) {
         WinLossRatioResult result = new WinLossRatioResult();
         ArrayList<WinLossRatioContribution> selected = new ArrayList<WinLossRatioContribution>();
@@ -71,6 +80,9 @@ public class WinLossRatioCalculator {
             this.weight = weight;
         }
 
+        /**
+         * evaluate。
+         */
         public WinLossRatioContribution evaluate(WinLossRatioInput input) {
             if (input == null || input.stock == null) {
                 return null;
@@ -110,6 +122,9 @@ public class WinLossRatioCalculator {
             this.weight = weight;
         }
 
+        /**
+         * evaluate。
+         */
         public WinLossRatioContribution evaluate(WinLossRatioInput input) {
             if (input == null || input.aiReference == null || !input.aiReference.success) {
                 return null;
@@ -136,6 +151,9 @@ public class WinLossRatioCalculator {
             this.weight = weight;
         }
 
+        /**
+         * evaluate。
+         */
         public WinLossRatioContribution evaluate(WinLossRatioInput input) {
             if (input == null || input.stock == null) {
                 return null;
@@ -161,6 +179,9 @@ public class WinLossRatioCalculator {
             return newContribution(10, 90, distance);
         }
 
+        /**
+         * newcontribution。
+         */
         private WinLossRatioContribution newContribution(int opportunity, int risk, double distance) {
             return new WinLossRatioContribution.Builder()
                     .id("limit_approach")

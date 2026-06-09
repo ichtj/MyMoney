@@ -20,10 +20,16 @@ public class HotStockCandidateRepository {
 
     private final SharedPreferences preferences;
 
+    /**
+     * 构造方法：创建 HotStockCandidateRepository 实例。
+     */
     public HotStockCandidateRepository(Context context) {
         preferences = context.getApplicationContext().getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
     }
 
+    /**
+     * 加载候选股票列表。
+     */
     public ArrayList<HotStockCandidate> loadCandidates() {
         ArrayList<HotStockCandidate> list = new ArrayList<HotStockCandidate>();
         try {
@@ -38,6 +44,9 @@ public class HotStockCandidateRepository {
         return list;
     }
 
+    /**
+     * 保存候选股票列表。
+     */
     public void saveCandidates(ArrayList<HotStockCandidate> candidates) {
         JSONArray array = new JSONArray();
         for (int i = 0; i < candidates.size(); i++) {
@@ -46,6 +55,9 @@ public class HotStockCandidateRepository {
         preferences.edit().putString(KEY_CANDIDATES, array.toString()).apply();
     }
 
+    /**
+     * 加载meta。
+     */
     public HotStockCandidateMeta loadMeta() {
         HotStockCandidateMeta meta = new HotStockCandidateMeta();
         meta.status = preferences.getString(KEY_STATUS, "");
@@ -54,6 +66,9 @@ public class HotStockCandidateRepository {
         return meta;
     }
 
+    /**
+     * 保存meta。
+     */
     public void saveMeta(String status, long refreshedAtMillis, String sourceSummary) {
         preferences.edit()
                 .putString(KEY_STATUS, status == null ? "" : status)

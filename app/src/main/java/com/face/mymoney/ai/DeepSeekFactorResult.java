@@ -9,6 +9,9 @@ public class DeepSeekFactorResult {
     public final int riskScore;
     public final String reason;
 
+    /**
+     * 构造方法：创建 DeepSeekFactorResult 实例。
+     */
     public DeepSeekFactorResult(String id, boolean valid, int opportunityScore,
                                 int riskScore, String reason) {
         this.id = id == null ? "" : id;
@@ -18,6 +21,9 @@ public class DeepSeekFactorResult {
         this.reason = reason == null ? "" : reason;
     }
 
+    /**
+     * 判断是否可用的。
+     */
     public boolean isUsable() {
         return valid
                 && opportunityScore >= 0
@@ -28,6 +34,9 @@ public class DeepSeekFactorResult {
                 && reason.trim().length() >= 12;
     }
 
+    /**
+     * 转换为JSON。
+     */
     public JSONObject toJson() {
         JSONObject object = new JSONObject();
         try {
@@ -41,6 +50,9 @@ public class DeepSeekFactorResult {
         return object;
     }
 
+    /**
+     * 从JSON。
+     */
     public static DeepSeekFactorResult fromJson(String fallbackId, JSONObject object) {
         if (object == null) {
             return new DeepSeekFactorResult(fallbackId, false, 0, 0, "");

@@ -22,10 +22,16 @@ public class StockNewsFetcher {
 
     private final Context context;
 
+    /**
+     * 构造方法：创建 StockNewsFetcher 实例。
+     */
     public StockNewsFetcher(Context context) {
         this.context = context.getApplicationContext();
     }
 
+    /**
+     * 获取for股票。
+     */
     public ArrayList<News> fetchForStock(Stock stock) {
         ArrayList<News> news = new ArrayList<News>();
         DefaultWebPageSourceLoader loader = new DefaultWebPageSourceLoader(context);
@@ -72,6 +78,9 @@ public class StockNewsFetcher {
         return news;
     }
 
+    /**
+     * 判断是否blocked页面。
+     */
     private boolean isBlockedPage(WebPageFetchResult result) {
         String value = (result.title + " " + result.snippet + " " + result.errorMessage).toLowerCase();
         return value.contains("安全验证")
@@ -82,6 +91,9 @@ public class StockNewsFetcher {
                 || value.contains("网络不给力");
     }
 
+    /**
+     * 判断是否搜索shell页面。
+     */
     private boolean isSearchShellPage(WebPageFetchResult result) {
         String title = result.title == null ? "" : result.title.trim();
         return "搜索结果 - 东方财富网".equals(title)
@@ -89,6 +101,9 @@ public class StockNewsFetcher {
                 || title.endsWith("| 搜索");
     }
 
+    /**
+     * 转换为新闻资讯列表。
+     */
     private ArrayList<News> toNewsList(Stock stock, WebPageFetchResult result) {
         if ("eastmoney_search_json".equalsIgnoreCase(result.source.parserType)) {
             return parseEastmoneySearchJson(stock, result);
@@ -114,6 +129,9 @@ public class StockNewsFetcher {
         return list;
     }
 
+    /**
+     * 解析东方财富搜索JSON。
+     */
     private ArrayList<News> parseEastmoneySearchJson(Stock stock, WebPageFetchResult result) {
         ArrayList<News> list = new ArrayList<News>();
         try {
@@ -150,6 +168,9 @@ public class StockNewsFetcher {
         return list;
     }
 
+    /**
+     * 解析东方财富noticeJSON。
+     */
     private ArrayList<News> parseEastmoneyNoticeJson(Stock stock, WebPageFetchResult result) {
         ArrayList<News> list = new ArrayList<News>();
         try {
@@ -183,6 +204,9 @@ public class StockNewsFetcher {
         return list;
     }
 
+    /**
+     * 解析东方财富数据列JSON。
+     */
     private ArrayList<News> parseEastmoneyColumnJson(Stock stock, WebPageFetchResult result) {
         ArrayList<News> list = new ArrayList<News>();
         try {
@@ -222,6 +246,9 @@ public class StockNewsFetcher {
         return list;
     }
 
+    /**
+     * 解析东方财富hsf10新闻资讯。
+     */
     private ArrayList<News> parseEastmoneyHsf10News(Stock stock, WebPageFetchResult result) {
         ArrayList<News> list = new ArrayList<News>();
         String text = htmlToLines(result.rawContent);
@@ -242,6 +269,9 @@ public class StockNewsFetcher {
         return list;
     }
 
+    /**
+     * 解析RSS订阅新闻资讯。
+     */
     private ArrayList<News> parseRssNews(Stock stock, WebPageFetchResult result) {
         ArrayList<News> list = new ArrayList<News>();
         Matcher matcher = Pattern.compile("(?is)<item\\b.*?</item>").matcher(result.rawContent);
@@ -261,6 +291,9 @@ public class StockNewsFetcher {
         return list;
     }
 
+    /**
+     * 构建新闻资讯。
+     */
     private News buildNews(Stock stock, String title, String source, String time, String content, String link) {
         String body = content.length() == 0 ? title : content;
         if (link.length() > 0) {
@@ -269,6 +302,9 @@ public class StockNewsFetcher {
         return new News(title, source, time.length() == 0 ? TIME_LABEL : time, keyword(stock), body);
     }
 
+    /**
+     * 判断是否有效/有用的股票新闻资讯。
+     */
     private boolean isUsefulStockNews(Stock stock, String title, String content) {
         if (title.length() < 6 || isGenericTitle(title)) {
             return false;
@@ -290,10 +326,16 @@ public class StockNewsFetcher {
                 || contains(value, "业绩");
     }
 
+    /**
+     * contains。
+     */
     private boolean contains(String value, String keyword) {
         return keyword != null && keyword.length() > 0 && !"--".equals(keyword) && value.contains(keyword);
     }
 
+    /**
+     * contains标题。
+     */
     private boolean containsTitle(ArrayList<News> news, String title) {
         for (int i = 0; i < news.size(); i++) {
             if (title.equals(news.get(i).title)) {
@@ -303,6 +345,9 @@ public class StockNewsFetcher {
         return false;
     }
 
+    /**
+     * 添加新闻资讯。
+     */
     private void addNews(ArrayList<News> target, ArrayList<News> source) {
         for (int i = 0; i < source.size() && target.size() < MAX_TOTAL_NEWS; i++) {
             News item = source.get(i);
@@ -312,6 +357,9 @@ public class StockNewsFetcher {
         }
     }
 
+    /**
+     * 首个/第一个数组。
+     */
     private JSONArray firstArray(JSONObject object, String... keys) {
         for (int i = 0; i < keys.length; i++) {
             JSONArray array = object.optJSONArray(keys[i]);
@@ -322,6 +370,9 @@ public class StockNewsFetcher {
         return null;
     }
 
+    /**
+     * 首个/第一个nonempty。
+     */
     private String firstNonEmpty(JSONObject object, String... keys) {
         for (int i = 0; i < keys.length; i++) {
             String value = object.optString(keys[i], "");
@@ -332,6 +383,9 @@ public class StockNewsFetcher {
         return "";
     }
 
+    /**
+     * unwrapjsonp。
+     */
     private String unwrapJsonp(String value) {
         if (value == null) {
             return "{}";
@@ -344,6 +398,9 @@ public class StockNewsFetcher {
         return value;
     }
 
+    /**
+     * HTML转换为lines。
+     */
     private String htmlToLines(String html) {
         if (html == null) {
             return "";
@@ -356,6 +413,9 @@ public class StockNewsFetcher {
         return cleanTextWithLines(text);
     }
 
+    /**
+     * clean创建文本控件使用lines。
+     */
     private String cleanTextWithLines(String value) {
         return decodeEntities(value)
                 .replace("\r", "\n")
@@ -366,6 +426,9 @@ public class StockNewsFetcher {
                 .trim();
     }
 
+    /**
+     * 判断是否generic标题。
+     */
     private boolean isGenericTitle(String title) {
         return title.length() == 0
                 || title.contains("搜索结果")
@@ -373,6 +436,9 @@ public class StockNewsFetcher {
                 || title.equals("搜索");
     }
 
+    /**
+     * 创建标签控件value。
+     */
     private String tagValue(String xml, String tag) {
         Matcher matcher = Pattern.compile("(?is)<" + tag + "\\b[^>]*>(.*?)</" + tag + ">").matcher(xml);
         if (matcher.find()) {
@@ -381,16 +447,25 @@ public class StockNewsFetcher {
         return "";
     }
 
+    /**
+     * 去除标签。
+     */
     private String stripTags(String value) {
         return value.replaceAll("(?is)<[^>]+>", " ");
     }
 
+    /**
+     * clean创建文本控件。
+     */
     private String cleanText(String value) {
         return decodeEntities(value)
                 .replaceAll("\\s+", " ")
                 .trim();
     }
 
+    /**
+     * decodeentities。
+     */
     private String decodeEntities(String value) {
         return value.replace("<![CDATA[", "")
                 .replace("]]>", "")
@@ -402,6 +477,9 @@ public class StockNewsFetcher {
                 .replace("&#39;", "'");
     }
 
+    /**
+     * keyword。
+     */
     private String keyword(Stock stock) {
         String keyword = stock.name + " " + stock.code;
         if (stock.industry.length() > 0 && !"--".equals(stock.industry)) {
@@ -410,6 +488,9 @@ public class StockNewsFetcher {
         return keyword;
     }
 
+    /**
+     * preview。
+     */
     private String preview(String value) {
         if (value == null) {
             return "";
@@ -418,12 +499,18 @@ public class StockNewsFetcher {
         return cleaned.length() > 120 ? cleaned.substring(0, 120) : cleaned;
     }
 
+    /**
+     * 转换为新闻资讯。
+     */
     private News toNews(Stock stock, WebPageFetchResult result) {
         String title = result.title.length() == 0 ? result.source.name : result.title;
         String content = result.snippet.length() == 0 ? "Fetched by current stock keywords." : result.snippet;
         return buildNews(stock, title, result.source.name, TIME_LABEL, content, result.source.url);
     }
 
+    /**
+     * sleepquietly。
+     */
     private void sleepQuietly(int delayMillis) {
         try {
             Thread.sleep(delayMillis);

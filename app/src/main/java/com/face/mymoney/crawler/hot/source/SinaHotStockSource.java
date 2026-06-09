@@ -18,20 +18,32 @@ public class SinaHotStockSource implements HotStockSource {
     private final SimpleHttpClient httpClient = new SimpleHttpClient();
     private final HotStockSourceConfig config;
 
+    /**
+     * 构造方法：创建 SinaHotStockSource 实例。
+     */
     public SinaHotStockSource(HotStockSourceConfig config) {
         this.config = config;
     }
 
+    /**
+     * id。
+     */
     @Override
     public String id() {
         return config.id;
     }
 
+    /**
+     * 权重。
+     */
     @Override
     public int weight() {
         return config.weight;
     }
 
+    /**
+     * 获取。
+     */
     @Override
     public ArrayList<HotStockSourceItem> fetch() {
         ArrayList<HotStockSourceItem> result = new ArrayList<HotStockSourceItem>();
@@ -44,6 +56,9 @@ public class SinaHotStockSource implements HotStockSource {
         return result;
     }
 
+    /**
+     * 获取rankchannel。
+     */
     private ArrayList<HotStockSourceItem> fetchRankChannel(HotStockSourceChannelConfig channel) {
         ArrayList<HotStockSourceItem> result = new ArrayList<HotStockSourceItem>();
         int targetCount = Math.max(80, config.rankPageSize);
@@ -103,6 +118,9 @@ public class SinaHotStockSource implements HotStockSource {
         return result;
     }
 
+    /**
+     * 从JSON。
+     */
     private HotStockSourceItem fromJson(JSONObject item, HotStockSourceChannelConfig channel) {
         HotStockSourceItem sourceItem = new HotStockSourceItem();
         sourceItem.code = item.optString("code", "");
@@ -131,6 +149,9 @@ public class SinaHotStockSource implements HotStockSource {
         return sourceItem;
     }
 
+    /**
+     * 判断是否有效的。
+     */
     private boolean isValid(HotStockSourceItem item) {
         return item.code != null && item.code.length() == 6
                 && item.name != null && item.name.length() > 0
@@ -140,6 +161,9 @@ public class SinaHotStockSource implements HotStockSource {
                 && isAllowedCode(item.code);
     }
 
+    /**
+     * 判断是否有todayranksignal。
+     */
     private boolean hasTodayRankSignal(HotStockSourceItem item) {
         Double amount = HotStockFormat.parseNumber(item.amount);
         Double turnoverRate = HotStockFormat.parseNumber(item.turnoverRate);
@@ -149,11 +173,17 @@ public class SinaHotStockSource implements HotStockSource {
                 || (changePercent != null && changePercent != 0d);
     }
 
+    /**
+     * 判断是否allowedcode。
+     */
     private boolean isAllowedCode(String code) {
         return (code.startsWith("00") || code.startsWith("30") || code.startsWith("60"))
                 && !code.startsWith("688");
     }
 
+    /**
+     * 首个/第一个positivevalue。
+     */
     private Object firstPositiveValue(JSONObject object, String[] primaryKeys, String[] fallbackKeys) {
         Object primary = firstValue(object, primaryKeys);
         Double primaryNumber = HotStockFormat.parseNumber(primary);
@@ -168,6 +198,9 @@ public class SinaHotStockSource implements HotStockSource {
         return primary;
     }
 
+    /**
+     * 首个/第一个value。
+     */
     private Object firstValue(JSONObject object, String... keys) {
         for (int i = 0; i < keys.length; i++) {
             if (object.has(keys[i])) {

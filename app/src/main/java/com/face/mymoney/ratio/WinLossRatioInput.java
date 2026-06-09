@@ -11,6 +11,9 @@ public class WinLossRatioInput {
     public final ArrayList<DecisionNote> notes;
     public final DeepSeekAnalysisResult aiReference;
 
+    /**
+     * 构造方法：创建 WinLossRatioInput 实例。
+     */
     public WinLossRatioInput(Stock stock, ArrayList<DecisionNote> notes,
                              DeepSeekAnalysisResult aiReference) {
         this.stock = stock;

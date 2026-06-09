@@ -13,6 +13,9 @@ public class PieRatioView extends View {
     private int riskColor;
     private int holeColor;
 
+    /**
+     * 构造方法：创建 PieRatioView 实例。
+     */
     public PieRatioView(Context context) {
         super(context);
         opportunityColor = 0xFFD92D20;
@@ -20,6 +23,9 @@ public class PieRatioView extends View {
         holeColor = 0xFFFFFFFF;
     }
 
+    /**
+     * 设置盈亏期望比。
+     */
     public void setRatio(float opportunityRatio, int opportunityColor, int riskColor, int holeColor) {
         if (opportunityRatio < 0f) {
             opportunityRatio = 0f;
@@ -34,6 +40,9 @@ public class PieRatioView extends View {
         invalidate();
     }
 
+    /**
+     * 当draw时的回调处理。
+     */
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);

@@ -15,10 +15,16 @@ public class StockQuoteFetcher {
 
     private final SimpleHttpClient httpClient = new SimpleHttpClient();
 
+    /**
+     * 刷新quotes。
+     */
     public int refreshQuotes(ArrayList<Stock> stocks) {
         return refreshQuotesDetailed(stocks).successCount;
     }
 
+    /**
+     * 刷新quotesdetailed。
+     */
     public QuoteRefreshResult refreshQuotesDetailed(ArrayList<Stock> stocks) {
         QuoteRefreshResult result = new QuoteRefreshResult(stocks.size());
         int successCount = 0;
@@ -36,10 +42,16 @@ public class StockQuoteFetcher {
         return result;
     }
 
+    /**
+     * 刷新quote。
+     */
     public boolean refreshQuote(Stock stock) {
         return refreshQuoteDetailed(stock).success;
     }
 
+    /**
+     * 刷新quotedetailed。
+     */
     public QuoteResult refreshQuoteDetailed(Stock stock) {
         QuoteResult eastmoney = refreshQuoteFromEastmoney(stock);
         if (eastmoney.success) {
@@ -53,6 +65,9 @@ public class StockQuoteFetcher {
         return QuoteResult.fail("Eastmoney failed: " + eastmoney.message + "; Sina failed: " + sina.message);
     }
 
+    /**
+     * 刷新quote从东方财富。
+     */
     private QuoteResult refreshQuoteFromEastmoney(Stock stock) {
         String url = "https://push2.eastmoney.com/api/qt/stock/get?secid="
                 + secId(stock.code)
@@ -116,6 +131,9 @@ public class StockQuoteFetcher {
         }
     }
 
+    /**
+     * 刷新quote从sina。
+     */
     private QuoteResult refreshQuoteFromSina(Stock stock) {
         String url = "https://hq.sinajs.cn/list=" + sinaSymbol(stock.code);
         try {
@@ -157,18 +175,27 @@ public class StockQuoteFetcher {
         }
     }
 
+    /**
+     * secid。
+     */
     private String secId(String code) {
         String safeCode = code == null ? "" : code.trim();
         String market = safeCode.startsWith("6") || safeCode.startsWith("9") ? "1" : "0";
         return market + "." + safeCode;
     }
 
+    /**
+     * sinasymbol。
+     */
     private String sinaSymbol(String code) {
         String safeCode = code == null ? "" : code.trim();
         String market = safeCode.startsWith("6") || safeCode.startsWith("9") ? "sh" : "sz";
         return market + safeCode;
     }
 
+    /**
+     * 格式化scaled。
+     */
     private String formatScaled(Object value, int scale) {
         Double number = parseNumber(value);
         if (number == null) {
@@ -178,6 +205,9 @@ public class StockQuoteFetcher {
         return String.format(Locale.CHINA, "%." + scale + "f", number / divider);
     }
 
+    /**
+     * 格式化percent。
+     */
     private String formatPercent(Object value) {
         Double number = parseNumber(value);
         if (number == null) {
@@ -188,6 +218,9 @@ public class StockQuoteFetcher {
         return prefix + String.format(Locale.CHINA, "%.2f%%", percent);
     }
 
+    /**
+     * 解析number。
+     */
     private Double parseNumber(Object value) {
         if (value == null || JSONObject.NULL.equals(value)) {
             return null;
@@ -203,6 +236,9 @@ public class StockQuoteFetcher {
         }
     }
 
+    /**
+     * clean创建文本控件。
+     */
     private String cleanText(String value) {
         if (value == null) {
             return "";
@@ -211,6 +247,9 @@ public class StockQuoteFetcher {
         return "-".equals(text) ? "" : text;
     }
 
+    /**
+     * preview。
+     */
     private String preview(String value) {
         if (value == null) {
             return "";
@@ -219,6 +258,9 @@ public class StockQuoteFetcher {
         return cleaned.length() > 120 ? cleaned.substring(0, 120) : cleaned;
     }
 
+    /**
+     * 安全message。
+     */
     private String safeMessage(Exception e) {
         String message = e.getMessage();
         return message == null || message.length() == 0 ? "no detail" : message;
@@ -250,15 +292,24 @@ public class StockQuoteFetcher {
         public final boolean success;
         public final String message;
 
+        /**
+         * quoteresult。
+         */
         private QuoteResult(boolean success, String message) {
             this.success = success;
             this.message = message;
         }
 
+        /**
+         * 成功结果。
+         */
         static QuoteResult success(String source) {
             return new QuoteResult(true, source);
         }
 
+        /**
+         * fail。
+         */
         static QuoteResult fail(String message) {
             return new QuoteResult(false, message);
         }

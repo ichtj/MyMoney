@@ -6,6 +6,9 @@ public class MarketIndexQuote {
     public String changePercent;
     public String source;
 
+    /**
+     * 构造方法：创建 MarketIndexQuote 实例。
+     */
     public MarketIndexQuote(String name, String price, String changePercent, String source) {
         this.name = name;
         this.price = price;
@@ -13,6 +16,9 @@ public class MarketIndexQuote {
         this.source = source;
     }
 
+    /**
+     * empty。
+     */
     public static MarketIndexQuote empty(String name) {
         return new MarketIndexQuote(name, "--", "--", "");
     }

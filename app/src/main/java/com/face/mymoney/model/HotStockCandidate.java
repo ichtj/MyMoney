@@ -42,6 +42,9 @@ public class HotStockCandidate {
     public String riskTag;
     public String collectedDate;
 
+    /**
+     * 转换为JSON。
+     */
     public JSONObject toJson() {
         JSONObject object = new JSONObject();
         try {
@@ -88,6 +91,9 @@ public class HotStockCandidate {
         return object;
     }
 
+    /**
+     * 从JSON。
+     */
     public static HotStockCandidate fromJson(JSONObject object) {
         HotStockCandidate candidate = new HotStockCandidate();
         candidate.code = object.optString("code");

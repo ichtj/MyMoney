@@ -17,6 +17,9 @@ import com.face.mymoney.ui.MainUiKit;
 
 public class LoginPageBuilder {
     public interface Listener {
+        /**
+         * 当登录时的回调处理。
+         */
         void onLogin(String account, View anchorView);
     }
 

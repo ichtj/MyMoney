@@ -14,10 +14,16 @@ public class HotStockSourceConfigLoader {
 
     private final Context context;
 
+    /**
+     * 构造方法：创建 HotStockSourceConfigLoader 实例。
+     */
     public HotStockSourceConfigLoader(Context context) {
         this.context = context.getApplicationContext();
     }
 
+    /**
+     * 加载启用的configs。
+     */
     public ArrayList<HotStockSourceConfig> loadEnabledConfigs() {
         ArrayList<HotStockSourceConfig> result = new ArrayList<HotStockSourceConfig>();
         ArrayList<HotStockSourceConfig> configs = loadConfigs();
@@ -30,6 +36,9 @@ public class HotStockSourceConfigLoader {
         return result;
     }
 
+    /**
+     * 加载configs。
+     */
     private ArrayList<HotStockSourceConfig> loadConfigs() {
         ArrayList<HotStockSourceConfig> result = new ArrayList<HotStockSourceConfig>();
         try {
@@ -45,6 +54,9 @@ public class HotStockSourceConfigLoader {
         return result;
     }
 
+    /**
+     * 添加defaultconfigs。
+     */
     private void addDefaultConfigs(ArrayList<HotStockSourceConfig> result) {
         HotStockSourceConfig eastmoney = new HotStockSourceConfig();
         eastmoney.id = "eastmoney";
@@ -73,6 +85,9 @@ public class HotStockSourceConfigLoader {
         result.add(tencent);
     }
 
+    /**
+     * defaultchannel。
+     */
     private HotStockSourceChannelConfig defaultChannel(String id, int weight, String sortField) {
         HotStockSourceChannelConfig config = new HotStockSourceChannelConfig();
         config.id = id;
@@ -82,6 +97,9 @@ public class HotStockSourceConfigLoader {
         return config;
     }
 
+    /**
+     * 读取Assets静态资源创建文本控件。
+     */
     private String readAssetText() throws Exception {
         InputStream inputStream = context.getAssets().open(ASSET_NAME);
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();

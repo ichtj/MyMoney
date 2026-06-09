@@ -14,6 +14,9 @@ public class SimpleWebPageFetcher {
 
     private final SimpleHttpClient httpClient = new SimpleHttpClient();
 
+    /**
+     * 获取。
+     */
     public WebPageFetchResult fetch(WebPageSource source) {
         long start = System.currentTimeMillis();
         try {
@@ -45,6 +48,9 @@ public class SimpleWebPageFetcher {
         }
     }
 
+    /**
+     * extract标题。
+     */
     private String extractTitle(String html) {
         Matcher matcher = TITLE_PATTERN.matcher(html);
         if (matcher.find()) {
@@ -53,6 +59,9 @@ public class SimpleWebPageFetcher {
         return "";
     }
 
+    /**
+     * 构建snippet。
+     */
     private String buildSnippet(String html) {
         String cleaned = SCRIPT_PATTERN.matcher(html).replaceAll(" ");
         cleaned = STYLE_PATTERN.matcher(cleaned).replaceAll(" ");
@@ -64,6 +73,9 @@ public class SimpleWebPageFetcher {
         return cleaned;
     }
 
+    /**
+     * clean创建文本控件。
+     */
     private String cleanText(String value) {
         String res = value.replace("&nbsp;", " ")
                 .replace("&amp;", "&")

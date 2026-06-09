@@ -15,6 +15,9 @@ public class StockOpinionFetcher {
     private static final int MAX_TOTAL = 24;
     private final com.face.mymoney.crawler.SimpleHttpClient httpClient = new com.face.mymoney.crawler.SimpleHttpClient();
 
+    /**
+     * 获取for股票。
+     */
     public ArrayList<Opinion> fetchForStock(Stock stock) {
         ArrayList<Opinion> opinions = new ArrayList<Opinion>();
         addOpinions(opinions, fetchEastmoneyGuba(stock));
@@ -27,6 +30,9 @@ public class StockOpinionFetcher {
         return opinions;
     }
 
+    /**
+     * 获取东方财富股吧。
+     */
     private ArrayList<Opinion> fetchEastmoneyGuba(Stock stock) {
         String url = "https://guba.eastmoney.com/list," + stock.code + ".html";
         WebText text = fetch(url, "Eastmoney Guba");
@@ -62,6 +68,9 @@ public class StockOpinionFetcher {
         return list;
     }
 
+    /**
+     * 获取东方财富移动端股吧。
+     */
     private ArrayList<Opinion> fetchEastmoneyMobileGuba(Stock stock) {
         String url = "https://mguba.eastmoney.com/mguba/list/" + stock.code + "%2C99%2Cf_1";
         WebText text = fetch(url, "Eastmoney Mobile Guba");
@@ -85,6 +94,9 @@ public class StockOpinionFetcher {
         return list;
     }
 
+    /**
+     * 获取淘股吧。
+     */
     private ArrayList<Opinion> fetchTaoguba(Stock stock) {
         String prefix = stock.code.startsWith("6") ? "sh" : "sz";
         String url = "https://www.tgb.cn/quotes/" + prefix + stock.code;
@@ -109,6 +121,9 @@ public class StockOpinionFetcher {
         return list;
     }
 
+    /**
+     * 获取tonghuashun智能诊股。
+     */
     private ArrayList<Opinion> fetchTonghuashunDoctor(Stock stock) {
         String url = "https://doctor.10jqka.com.cn/" + stock.code + "/";
         WebText text = fetch(url, "Tonghuashun Doctor");
@@ -130,6 +145,9 @@ public class StockOpinionFetcher {
         return list;
     }
 
+    /**
+     * 查找就近时间。
+     */
     private String findNearbyTime(String html, int startIndex) {
         int start = Math.max(0, startIndex - 240);
         int end = Math.min(html.length(), startIndex + 360);
@@ -149,6 +167,9 @@ public class StockOpinionFetcher {
         return "近期";
     }
 
+    /**
+     * 获取bing舆情观点RSS订阅。
+     */
     private ArrayList<Opinion> fetchBingOpinionRss(Stock stock) {
         String query = stock.name + " " + stock.code + " 股吧 看法 观点 评论";
         String url = "https://www.bing.com/news/search?q=" + Uri.encode(query) + "&format=rss";
@@ -177,6 +198,9 @@ public class StockOpinionFetcher {
         return list;
     }
 
+    /**
+     * 获取雪球搜索。
+     */
     private ArrayList<Opinion> fetchXueqiuSearch(Stock stock) {
         String symbol = stock.code.startsWith("6") ? "SH" + stock.code : "SZ" + stock.code;
         String url = "https://xueqiu.com/k?q=" + Uri.encode(symbol + " " + stock.name);
@@ -199,6 +223,9 @@ public class StockOpinionFetcher {
         return list;
     }
 
+    /**
+     * 获取。
+     */
     private WebText fetch(String url, String source) {
         com.face.mymoney.crawler.SimpleHttpClient.HttpText response = httpClient.get(url, TIMEOUT_MILLIS, MAX_READ_BYTES,
                 "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -214,6 +241,9 @@ public class StockOpinionFetcher {
         return new WebText(true, response.body);
     }
 
+    /**
+     * 添加舆情观点列表。
+     */
     private void addOpinions(ArrayList<Opinion> target, ArrayList<Opinion> source) {
         for (int i = 0; i < source.size() && target.size() < MAX_TOTAL; i++) {
             Opinion opinion = source.get(i);
@@ -223,6 +253,9 @@ public class StockOpinionFetcher {
         }
     }
 
+    /**
+     * 判断是否有效/有用的舆情观点。
+     */
     private boolean isUsefulOpinion(Stock stock, String value) {
         if (value == null) {
             return false;
@@ -243,6 +276,9 @@ public class StockOpinionFetcher {
                 || cleaned.contains("讨论");
     }
 
+    /**
+     * contains标题。
+     */
     private boolean containsTitle(ArrayList<Opinion> opinions, String title) {
         for (int i = 0; i < opinions.size(); i++) {
             if (title.equals(opinions.get(i).title)) {
@@ -252,6 +288,9 @@ public class StockOpinionFetcher {
         return false;
     }
 
+    /**
+     * 规范化URL。
+     */
     private String normalizeUrl(String host, String value) {
         if (value.startsWith("http://") || value.startsWith("https://")) {
             return value;
@@ -262,6 +301,9 @@ public class StockOpinionFetcher {
         return host + "/" + value;
     }
 
+    /**
+     * 创建标签控件value。
+     */
     private String tagValue(String xml, String tag) {
         Matcher matcher = Pattern.compile("(?is)<" + tag + "\\b[^>]*>(.*?)</" + tag + ">").matcher(xml);
         if (matcher.find()) {
@@ -270,18 +312,27 @@ public class StockOpinionFetcher {
         return "";
     }
 
+    /**
+     * 去除标签。
+     */
     private String stripTags(String value) {
         return value.replaceAll("(?is)<script[^>]*>.*?</script>", " ")
                 .replaceAll("(?is)<style[^>]*>.*?</style>", " ")
                 .replaceAll("(?is)<[^>]+>", " ");
     }
 
+    /**
+     * clean创建文本控件。
+     */
     private String cleanText(String value) {
         return decodeEntities(value)
                 .replaceAll("\\s+", " ")
                 .trim();
     }
 
+    /**
+     * decodeentities。
+     */
     private String decodeEntities(String value) {
         return (value == null ? "" : value)
                 .replace("<![CDATA[", "")
@@ -294,15 +345,24 @@ public class StockOpinionFetcher {
                 .replace("&#39;", "'");
     }
 
+    /**
+     * keyword。
+     */
     private String keyword(Stock stock) {
         return stock.name + " " + stock.code;
     }
 
+    /**
+     * preview。
+     */
     private String preview(String value) {
         String cleaned = cleanText(stripTags(value));
         return cleaned.length() > 120 ? cleaned.substring(0, 120) : cleaned;
     }
 
+    /**
+     * preview长整数。
+     */
     private String previewLong(String value, int maxLength) {
         String cleaned = cleanText(stripTags(value));
         return cleaned.length() > maxLength ? cleaned.substring(0, maxLength) : cleaned;

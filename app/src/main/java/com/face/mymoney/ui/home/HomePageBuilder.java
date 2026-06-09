@@ -29,22 +29,49 @@ public class HomePageBuilder {
     private static final String BOARD_THEME_TAG = "MyMoneyBoardTheme";
 
     public interface Listener {
+        /**
+         * 当添加股票时的回调处理。
+         */
         void onAddStock();
 
+        /**
+         * 当添加分组时的回调处理。
+         */
         void onAddGroup();
 
+        /**
+         * 当分组选中的时的回调处理。
+         */
         void onGroupSelected(String group);
 
+        /**
+         * 当股票选中的时的回调处理。
+         */
         void onStockSelected(Stock stock);
 
+        /**
+         * 当edit股票时的回调处理。
+         */
         void onEditStock(Stock stock);
 
+        /**
+         * 当删除股票时的回调处理。
+         */
         void onDeleteStock(Stock stock);
 
+        /**
+         * 当移动股票置顶时的回调处理。
+         */
         void onMoveStockTop(Stock stock);
 
+        /**
+         * 当移动股票置底时的回调处理。
+         */
         void onMoveStockBottom(Stock stock);
 
+        /**
+         * 当调试requested时的回调处理。
+         */
         void onDebugRequested();
     }
 

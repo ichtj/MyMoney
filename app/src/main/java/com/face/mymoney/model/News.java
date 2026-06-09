@@ -9,6 +9,9 @@ public class News {
     public String keyword;
     public String content;
 
+    /**
+     * 构造方法：创建 News 实例。
+     */
     public News(String title, String source, String time, String keyword, String content) {
         this.title = title;
         this.source = source;
@@ -17,6 +20,9 @@ public class News {
         this.content = content;
     }
 
+    /**
+     * 转换为JSON。
+     */
     public JSONObject toJson() {
         JSONObject object = new JSONObject();
         try {
@@ -30,6 +36,9 @@ public class News {
         return object;
     }
 
+    /**
+     * 从JSON。
+     */
     public static News fromJson(JSONObject object) {
         return new News(
                 object.optString("title", ""),

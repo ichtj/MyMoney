@@ -12,11 +12,17 @@ import java.util.Map;
 public class SimpleHttpClient {
     private static final String DEFAULT_USER_AGENT = "Mozilla/5.0 MyMoneyBot/1.0";
 
+    /**
+     * 获取。
+     */
     public HttpText get(String url, int timeoutMillis, int maxReadBytes,
                         String accept, String userAgent) {
         return get(url, timeoutMillis, maxReadBytes, accept, userAgent, null);
     }
 
+    /**
+     * 获取。
+     */
     public HttpText get(String url, int timeoutMillis, int maxReadBytes,
                         String accept, String userAgent, String referer) {
         HashMap<String, String> headers = new HashMap<String, String>();
@@ -26,6 +32,9 @@ public class SimpleHttpClient {
         return request("GET", url, timeoutMillis, maxReadBytes, headers, null);
     }
 
+    /**
+     * postJSON。
+     */
     public HttpText postJson(String url, int timeoutMillis, int maxReadBytes,
                              String authorization, String body) {
         HashMap<String, String> headers = new HashMap<String, String>();
@@ -35,6 +44,9 @@ public class SimpleHttpClient {
         return request("POST", url, timeoutMillis, maxReadBytes, headers, body);
     }
 
+    /**
+     * 请求。
+     */
     private HttpText request(String method, String url, int timeoutMillis, int maxReadBytes,
                              HashMap<String, String> headers, String body) {
         HttpURLConnection connection = null;
@@ -68,12 +80,18 @@ public class SimpleHttpClient {
         }
     }
 
+    /**
+     * putheader。
+     */
     private void putHeader(HashMap<String, String> headers, String key, String value) {
         if (value != null && value.length() > 0) {
             headers.put(key, value);
         }
     }
 
+    /**
+     * 读取创建文本控件。
+     */
     private String readText(InputStream inputStream, int maxReadBytes) throws Exception {
         if (inputStream == null) {
             return "";
@@ -96,6 +114,9 @@ public class SimpleHttpClient {
         return outputStream.toString("UTF-8");
     }
 
+    /**
+     * 安全message。
+     */
     private String safeMessage(Exception e) {
         String message = e.getMessage();
         return message == null || message.length() == 0 ? "no detail" : message;
@@ -116,6 +137,9 @@ public class SimpleHttpClient {
             this.elapsedMillis = elapsedMillis;
         }
 
+        /**
+         * 判断是否HTTP成功结果。
+         */
         public boolean isHttpSuccess() {
             return transportSuccess && statusCode >= 200 && statusCode < 400;
         }

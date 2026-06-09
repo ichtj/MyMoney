@@ -33,10 +33,16 @@ public class WinLossRatioCard {
     private static final int COLOR_OPPORTUNITY = Color.rgb(217, 45, 32);
     private static final int COLOR_RISK = Color.rgb(7, 148, 85);
 
+    /**
+     * create。
+     */
     public static View create(Context context, Stock stock, ArrayList<DecisionNote> notes) {
         return create(context, stock, notes, null, false, null);
     }
 
+    /**
+     * create。
+     */
     public static View create(Context context, Stock stock, ArrayList<DecisionNote> notes,
                               DeepSeekAnalysisResult aiReference, boolean loadingAiReference,
                               View.OnClickListener aiClickListener) {
@@ -139,6 +145,9 @@ public class WinLossRatioCard {
         return card;
     }
 
+    /**
+     * 应用建议。
+     */
     private static void applyAdvice(Context context, WinLossRatioResult data) {
         if (!data.hasDisplayRatio()) {
             return;
@@ -152,10 +161,16 @@ public class WinLossRatioCard {
         }
     }
 
+    /**
+     * 安全创建文本控件。
+     */
     private static String safeText(String value) {
         return value == null ? "" : value.trim();
     }
 
+    /**
+     * 图例。
+     */
     private static LinearLayout legend(Context context, String label, int color) {
         LinearLayout row = horizontal(context);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -167,18 +182,27 @@ public class WinLossRatioCard {
         return row;
     }
 
+    /**
+     * 创建垂直布局。
+     */
     private static LinearLayout vertical(Context context) {
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
         return layout;
     }
 
+    /**
+     * 创建水平布局。
+     */
     private static LinearLayout horizontal(Context context) {
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.HORIZONTAL);
         return layout;
     }
 
+    /**
+     * 创建文本控件。
+     */
     private static TextView text(Context context, String value, int sp, int color, boolean bold) {
         TextView view = new TextView(context);
         view.setText(value);
@@ -190,22 +214,34 @@ public class WinLossRatioCard {
         return view;
     }
 
+    /**
+     * 创建间距控件。
+     */
     private static View spacer(Context context, int height) {
         View view = new View(context);
         view.setLayoutParams(new LinearLayout.LayoutParams(1, dp(context, height)));
         return view;
     }
 
+    /**
+     * 创建间距控件。
+     */
     private static View spacer(Context context, int width, int height) {
         View view = new View(context);
         view.setLayoutParams(new LinearLayout.LayoutParams(dp(context, width), dp(context, height)));
         return view;
     }
 
+    /**
+     * 填充包裹。
+     */
     private static LinearLayout.LayoutParams matchWrap() {
         return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
+    /**
+     * 创建圆角背景。
+     */
     private static GradientDrawable rounded(int color, int radius) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);
@@ -214,6 +250,9 @@ public class WinLossRatioCard {
         return drawable;
     }
 
+    /**
+     * 将dp值转换为像素值。
+     */
     private static int dp(Context context, int value) {
         return ResponsiveMetrics.dp(context, value);
     }

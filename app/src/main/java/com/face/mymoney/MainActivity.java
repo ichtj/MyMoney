@@ -149,6 +149,9 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    /**
+     * 当create时的回调处理。
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -179,18 +182,27 @@ public class MainActivity extends AppCompatActivity {
         scheduleQuoteAutoRefresh();
     }
 
+    /**
+     * 当停止时的回调处理。
+     */
     @Override
     protected void onStop() {
         quoteRefreshHandler.removeCallbacks(quoteAutoRefreshRunnable);
         super.onStop();
     }
 
+    /**
+     * 当启动时的回调处理。
+     */
     @Override
     protected void onStart() {
         super.onStart();
         scheduleQuoteAutoRefresh();
     }
 
+    /**
+     * 当destroy时的回调处理。
+     */
     @Override
     protected void onDestroy() {
         quoteRefreshHandler.removeCallbacks(quoteAutoRefreshRunnable);
@@ -198,6 +210,9 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
+    /**
+     * 当返回按下的时的回调处理。
+     */
     @Override
     public void onBackPressed() {
         if (currentStock != null) {
@@ -207,6 +222,9 @@ public class MainActivity extends AppCompatActivity {
         super.onBackPressed();
     }
 
+    /**
+     * install返回handler。
+     */
     private void installBackHandler() {
         detailBackCallback = new OnBackPressedCallback(false) {
             @Override
@@ -217,22 +235,34 @@ public class MainActivity extends AppCompatActivity {
         getOnBackPressedDispatcher().addCallback(this, detailBackCallback);
     }
 
+    /**
+     * 设置详情返回启用的。
+     */
     private void setDetailBackEnabled(boolean enabled) {
         if (detailBackCallback != null) {
             detailBackCallback.setEnabled(enabled);
         }
     }
 
+    /**
+     * leave股票详情。
+     */
     private void leaveStockDetail() {
         currentStock = null;
         setDetailBackEnabled(false);
         showMainShell();
     }
 
+    /**
+     * 判断是否loggedin。
+     */
     private boolean isLoggedIn() {
         return authManager.isLoggedIn();
     }
 
+    /**
+     * 弹出/显示登录。
+     */
     private void showLogin() {
         currentStock = null;
         setDetailBackEnabled(false);
@@ -251,6 +281,9 @@ public class MainActivity extends AppCompatActivity {
         root.addView(builder.build(), matchMatch());
     }
 
+    /**
+     * 弹出/显示主界面shell。
+     */
     private void showMainShell() {
         currentStock = null;
         setDetailBackEnabled(false);
@@ -264,6 +297,9 @@ public class MainActivity extends AppCompatActivity {
         showCurrentTab();
     }
 
+    /**
+     * 弹出/显示currenttab。
+     */
     private void showCurrentTab() {
         if (tabContent == null) {
             return;
@@ -292,6 +328,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * schedulequoteauto刷新。
+     */
     private void scheduleQuoteAutoRefresh() {
         quoteRefreshHandler.removeCallbacks(quoteAutoRefreshRunnable);
         long delay = shouldAutoRefreshQuotes()
@@ -300,10 +339,16 @@ public class MainActivity extends AppCompatActivity {
         quoteRefreshHandler.postDelayed(quoteAutoRefreshRunnable, delay);
     }
 
+    /**
+     * 运行inbackground。
+     */
     private void runInBackground(Runnable runnable) {
         backgroundExecutor.execute(runnable);
     }
 
+    /**
+     * 运行onUIifalive。
+     */
     private void runOnUiIfAlive(Runnable runnable) {
         if (isFinishing() || isDestroyed()) {
             return;
@@ -311,6 +356,9 @@ public class MainActivity extends AppCompatActivity {
         runOnUiThread(runnable);
     }
 
+    /**
+     * 弹出/显示home。
+     */
     private void showHome() {
         currentStock = null;
         setDetailBackEnabled(false);
@@ -319,6 +367,9 @@ public class MainActivity extends AppCompatActivity {
         showMainShell();
     }
 
+    /**
+     * 构建watchlist页面。
+     */
     private View buildWatchlistPage() {
         ArrayList<Stock> displayStocks = filterStocks();
         android.util.Log.d(BOARD_THEME_TAG, "watchlist build selectedGroup=" + selectedGroup
@@ -380,6 +431,9 @@ public class MainActivity extends AppCompatActivity {
         return builder.build();
     }
 
+    /**
+     * 构建胜率赔率opportunitypercents。
+     */
     private HashMap<String, Integer> buildWinLossOpportunityPercents(ArrayList<Stock> displayStocks) {
         HashMap<String, Integer> result = new HashMap<String, Integer>();
         if (displayStocks == null || displayStocks.size() == 0) {
@@ -410,12 +464,18 @@ public class MainActivity extends AppCompatActivity {
         return result;
     }
 
+    /**
+     * 判断是否有效的胜率赔率aireference。
+     */
     private boolean isValidWinLossAiReference(DeepSeekAnalysisResult analysis, Long fetchedAt) {
         return analysis != null
                 && analysis.success
                 && !isDetailCacheExpired(fetchedAt);
     }
 
+    /**
+     * 置底tabs。
+     */
     private View bottomTabs() {
         LinearLayout tabs = horizontal();
         tabs.setGravity(Gravity.CENTER);
@@ -431,6 +491,9 @@ public class MainActivity extends AppCompatActivity {
         return tabs;
     }
 
+    /**
+     * tabitem。
+     */
     private View tabItem(String label, final String tab, int iconResId) {
         boolean selected = currentTab.equals(tab);
         int activeText = COLOR_ACCENT;
@@ -459,6 +522,9 @@ public class MainActivity extends AppCompatActivity {
         return item;
     }
 
+    /**
+     * 构建新闻资讯feed页面。
+     */
     private View buildNewsFeedPage() {
         LinearLayout rootPage = vertical();
         rootPage.setBackgroundColor(Color.rgb(245, 247, 251));
@@ -546,6 +612,9 @@ public class MainActivity extends AppCompatActivity {
         return rootPage;
     }
 
+    /**
+     * 新闻资讯modeswitchbar。
+     */
     private View newsModeSwitchBar() {
         LinearLayout row = horizontal();
         row.setPadding(dp(3), dp(3), dp(3), dp(3));
@@ -555,6 +624,9 @@ public class MainActivity extends AppCompatActivity {
         return row;
     }
 
+    /**
+     * 新闻资讯modechip。
+     */
     private TextView newsModeChip(String label, final String mode) {
         boolean selected = selectedNewsMode.equals(mode);
         TextView chip = text(label, 13, selected ? Color.WHITE : COLOR_TEXT, true);
@@ -571,6 +643,9 @@ public class MainActivity extends AppCompatActivity {
         return chip;
     }
 
+    /**
+     * compact数据源barforfeed。
+     */
     private View compactSourceBarForFeed(ArrayList<String> sources, String selectedSource, final String feedKey) {
         final android.widget.HorizontalScrollView scroll = new android.widget.HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);
@@ -602,6 +677,9 @@ public class MainActivity extends AppCompatActivity {
         return scroll;
     }
 
+    /**
+     * 数据源switchbarforfeed。
+     */
     private View sourceSwitchBarForFeed(ArrayList<String> sources, String selectedSource, final String feedKey) {
         final android.widget.HorizontalScrollView scroll = new android.widget.HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);
@@ -633,6 +711,9 @@ public class MainActivity extends AppCompatActivity {
         return scroll;
     }
 
+    /**
+     * feed新闻资讯行布局。
+     */
     private View feedNewsRow(final News item) {
         LinearLayout row = card();
         row.setPadding(dp(14), dp(12), dp(14), dp(12));
@@ -650,6 +731,9 @@ public class MainActivity extends AppCompatActivity {
         return row;
     }
 
+    /**
+     * 构建hot候选股票列表页面。
+     */
     private View buildHotCandidatesPage() {
         ScrollView scrollView = new ScrollView(this);
         LinearLayout page = vertical();
@@ -703,6 +787,9 @@ public class MainActivity extends AppCompatActivity {
         return scrollView;
     }
 
+    /**
+     * hotdatastatus创建文本控件。
+     */
     private String hotDataStatusText() {
         if (loadingHotCandidates) {
             return "正在获取最新数据";
@@ -723,6 +810,9 @@ public class MainActivity extends AppCompatActivity {
         return "尚未刷新数据";
     }
 
+    /**
+     * hotdatastatus颜色。
+     */
     private int hotDataStatusColor() {
         if (HOT_STATUS_CACHED.equals(hotDataStatus) || HOT_STATUS_DEGRADED.equals(hotDataStatus)) {
             return Color.rgb(180, 83, 9);
@@ -733,6 +823,9 @@ public class MainActivity extends AppCompatActivity {
         return COLOR_SUB;
     }
 
+    /**
+     * 格式化hotdata时间。
+     */
     private String formatHotDataTime(long millis) {
         if (millis <= 0L) {
             return "时间未知";
@@ -741,6 +834,9 @@ public class MainActivity extends AppCompatActivity {
                 .format(new java.util.Date(millis));
     }
 
+    /**
+     * hot候选股票创建卡片布局。
+     */
     private View hotCandidateCard(final int rank, final HotStockCandidate candidate) {
         LinearLayout card = card();
         card.setPadding(dp(12), dp(10), dp(12), dp(10));
@@ -804,6 +900,9 @@ public class MainActivity extends AppCompatActivity {
         return card;
     }
 
+    /**
+     * 行业徽章。
+     */
     private TextView industryBadge(String industry) {
         String label = industry == null || industry.length() == 0 || "--".equals(industry)
                 ? "行业待识别"
@@ -815,6 +914,9 @@ public class MainActivity extends AppCompatActivity {
         return badge;
     }
 
+    /**
+     * 构建个人中心页面。
+     */
     private View buildProfilePage() {
         ScrollView scrollView = new ScrollView(this);
         LinearLayout page = vertical();
@@ -877,6 +979,9 @@ public class MainActivity extends AppCompatActivity {
         return scrollView;
     }
 
+    /**
+     * 个人中心登录创建卡片布局。
+     */
     private View profileLoginCard() {
         LinearLayout card = profileCard();
         card.addView(text(getString(R.string.login_title), 22, COLOR_TEXT, true), matchWrap());
@@ -908,12 +1013,18 @@ public class MainActivity extends AppCompatActivity {
         return card;
     }
 
+    /**
+     * 个人中心创建卡片布局。
+     */
     private LinearLayout profileCard() {
         LinearLayout card = card();
         card.setBackground(roundedStroke(Color.WHITE, dp(18), Color.rgb(226, 232, 240)));
         return card;
     }
 
+    /**
+     * 头像视图。
+     */
     private TextView avatarView(String name, int style, int size) {
         int[] colors = new int[]{
                 Color.rgb(37, 99, 235),
@@ -931,6 +1042,9 @@ public class MainActivity extends AppCompatActivity {
         return avatar;
     }
 
+    /**
+     * 头像创建文本控件。
+     */
     private String avatarText(String name) {
         if (name == null || name.trim().length() == 0) {
             return "U";
@@ -939,6 +1053,9 @@ public class MainActivity extends AppCompatActivity {
         return value.substring(0, 1).toUpperCase(Locale.CHINA);
     }
 
+    /**
+     * 弹出/显示edit个人中心对话框。
+     */
     private void showEditProfileDialog() {
         LinearLayout form = vertical();
         form.setPadding(dp(18), dp(8), dp(18), 0);
@@ -982,6 +1099,9 @@ public class MainActivity extends AppCompatActivity {
         dialog.show();
     }
 
+    /**
+     * 弹出/显示股票详情。
+     */
     private void showStockDetail(final Stock stock) {
         currentStock = stock;
         setDetailBackEnabled(true);
@@ -1086,6 +1206,9 @@ public class MainActivity extends AppCompatActivity {
         loadDeepSeekAnalysisIfReady(stock);
     }
 
+    /**
+     * quoteitem。
+     */
     private View quoteItem(String label, String value, int valueColor) {
         LinearLayout box = vertical();
         box.addView(text(label, 12, Color.rgb(203, 213, 225), false), matchWrap());
@@ -1094,6 +1217,9 @@ public class MainActivity extends AppCompatActivity {
         return box;
     }
 
+    /**
+     * hero创建卡片布局。
+     */
     private View heroCard(Stock stock) {
         android.util.Log.d(BOARD_THEME_TAG, "detailHero " + StockDisplayText.debugSummary(this, stock, 14));
         LinearLayout hero = card();
@@ -1129,6 +1255,9 @@ public class MainActivity extends AppCompatActivity {
         return hero;
     }
 
+    /**
+     * singleline创建文本控件。
+     */
     private TextView singleLineText(String value, int sp, int color, boolean bold) {
         TextView view = text(value, sp, color, bold);
         view.setSingleLine(true);
@@ -1137,6 +1266,9 @@ public class MainActivity extends AppCompatActivity {
         return view;
     }
 
+    /**
+     * 胜率赔率盈亏期望比创建卡片布局。
+     */
     private View winLossRatioCard(Stock stock) {
         return WinLossRatioCard.create(this, stock, getNotes(stock.code),
                 deepSeekAnalysisCache.get(stock.code), loadingDeepSeekCodes.contains(stock.code),
@@ -1148,6 +1280,9 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
+    /**
+     * 刷新胜率赔率盈亏期望比创建卡片布局。
+     */
     private void refreshWinLossRatioCard(Stock stock) {
         if (currentWinLossContainer == null) {
             return;
@@ -1156,6 +1291,9 @@ public class MainActivity extends AppCompatActivity {
         currentWinLossContainer.addView(winLossRatioCard(stock), matchWrap());
     }
 
+    /**
+     * company创建卡片布局。
+     */
     private View companyCard(Stock stock) {
         android.util.Log.d(BOARD_THEME_TAG, "detailCompany " + StockDisplayText.debugSummary(this, stock, 14));
         LinearLayout card = card();
@@ -1180,6 +1318,9 @@ public class MainActivity extends AppCompatActivity {
         return card;
     }
 
+    /**
+     * compactinfo。
+     */
     private View compactInfo(String label, String value) {
         LinearLayout box = vertical();
         box.setPadding(dp(10), dp(8), dp(10), dp(8));
@@ -1190,10 +1331,16 @@ public class MainActivity extends AppCompatActivity {
         return box;
     }
 
+    /**
+     * 股票board创建文本控件。
+     */
     private String stockBoardText(Stock stock) {
         return StockDisplayText.board(this, stock);
     }
 
+    /**
+     * 新闻资讯列表。
+     */
     private View newsList(final Stock stock) {
         LinearLayout list = vertical();
         ArrayList<News> news = buildNews(stock);
@@ -1231,6 +1378,9 @@ public class MainActivity extends AppCompatActivity {
         return list;
     }
 
+    /**
+     * 新闻资讯行布局。
+     */
     private View newsRow(final Stock stock, final News item) {
         LinearLayout row = card();
         row.setPadding(dp(12), dp(9), dp(12), dp(9));
@@ -1246,6 +1396,9 @@ public class MainActivity extends AppCompatActivity {
         return row;
     }
 
+    /**
+     * 决策笔记列表。
+     */
     private View noteList(Stock stock) {
         LinearLayout list = vertical();
         ArrayList<DecisionNote> stockNotes = getNotes(stock.code);
@@ -1281,6 +1434,9 @@ public class MainActivity extends AppCompatActivity {
         return list;
     }
 
+    /**
+     * 舆情观点列表。
+     */
     private View opinionList(final Stock stock) {
         LinearLayout list = vertical();
         ArrayList<Opinion> opinions = buildOpinions(stock);
@@ -1315,6 +1471,9 @@ public class MainActivity extends AppCompatActivity {
         return list;
     }
 
+    /**
+     * 数据源switchbar。
+     */
     private View sourceSwitchBar(final Stock stock, ArrayList<String> sources, String selectedSource, final boolean news) {
         final android.widget.HorizontalScrollView scroll = new android.widget.HorizontalScrollView(this);
         scroll.setHorizontalScrollBarEnabled(false);
@@ -1352,6 +1511,9 @@ public class MainActivity extends AppCompatActivity {
         return scroll;
     }
 
+    /**
+     * 滚动选中的数据源into视图。
+     */
     private void scrollSelectedSourceIntoView(final android.widget.HorizontalScrollView scroll, final View selectedChip) {
         if (selectedChip == null) {
             return;
@@ -1365,6 +1527,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 刷新数据源section。
+     */
     private void refreshSourceSection(Stock stock, boolean news) {
         if (news) {
             if (currentNewsContainer != null) {
@@ -1379,6 +1544,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 刷新决策笔记section。
+     */
     private void refreshNoteSection(Stock stock) {
         if (currentNoteContainer == null) {
             return;
@@ -1387,6 +1555,9 @@ public class MainActivity extends AppCompatActivity {
         currentNoteContainer.addView(noteList(stock), matchWrap());
     }
 
+    /**
+     * 选中的新闻资讯数据源。
+     */
     private String selectedNewsSource(Stock stock, ArrayList<String> sources) {
         String selected = selectedNewsSources.get(stock.code);
         if (selected != null && sources.contains(selected)) {
@@ -1397,6 +1568,9 @@ public class MainActivity extends AppCompatActivity {
         return first;
     }
 
+    /**
+     * 选中的舆情观点数据源。
+     */
     private String selectedOpinionSource(Stock stock, ArrayList<String> sources) {
         String selected = selectedOpinionSources.get(stock.code);
         if (selected != null && sources.contains(selected)) {
@@ -1407,6 +1581,9 @@ public class MainActivity extends AppCompatActivity {
         return first;
     }
 
+    /**
+     * 记住详情滚动。
+     */
     private void rememberDetailScroll() {
         if (root.getChildCount() == 0) {
             pendingDetailScrollY = -1;
@@ -1420,6 +1597,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 恢复详情滚动。
+     */
     private void restoreDetailScroll(final ScrollView scrollView) {
         if (pendingDetailScrollY < 0) {
             return;
@@ -1434,6 +1614,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 记住watchlist滚动。
+     */
     private void rememberWatchlistScroll() {
         pendingWatchlistScrollY = -1;
         if (tabContent == null || tabContent.getChildCount() == 0) {
@@ -1445,6 +1628,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 恢复watchlist滚动。
+     */
     private void restoreWatchlistScroll(final ScrollView scrollView) {
         if (pendingWatchlistScrollY < 0) {
             return;
@@ -1459,6 +1645,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 记住hot滚动。
+     */
     private void rememberHotScroll() {
         pendingHotScrollY = -1;
         if (tabContent == null || tabContent.getChildCount() == 0) {
@@ -1470,6 +1659,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 恢复hot滚动。
+     */
     private void restoreHotScroll(final ScrollView scrollView) {
         if (pendingHotScrollY < 0) {
             return;
@@ -1484,6 +1676,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 数据源header。
+     */
     private View sourceHeader(String source, int count, String suffix) {
         LinearLayout row = horizontal();
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -1494,6 +1689,9 @@ public class MainActivity extends AppCompatActivity {
         return row;
     }
 
+    /**
+     * 舆情观点行布局。
+     */
     private View opinionRow(final Stock stock, final Opinion item) {
             LinearLayout row = card();
             row.setPadding(dp(12), dp(9), dp(12), dp(9));
@@ -1509,6 +1707,9 @@ public class MainActivity extends AppCompatActivity {
             return row;
     }
 
+    /**
+     * 获取舆情观点数据源列表。
+     */
     private ArrayList<String> getOpinionSources(ArrayList<Opinion> opinions) {
         ArrayList<String> sources = new ArrayList<String>();
         for (int i = 0; i < opinions.size(); i++) {
@@ -1520,6 +1721,9 @@ public class MainActivity extends AppCompatActivity {
         return sources;
     }
 
+    /**
+     * 获取新闻资讯数据源列表。
+     */
     private ArrayList<String> getNewsSources(ArrayList<News> news) {
         ArrayList<String> sources = new ArrayList<String>();
         for (int i = 0; i < news.size(); i++) {
@@ -1531,6 +1735,9 @@ public class MainActivity extends AppCompatActivity {
         return sources;
     }
 
+    /**
+     * 获取新闻资讯根据数据源。
+     */
     private ArrayList<News> getNewsBySource(ArrayList<News> news, String source) {
         ArrayList<News> result = new ArrayList<News>();
         for (int i = 0; i < news.size(); i++) {
@@ -1542,6 +1749,9 @@ public class MainActivity extends AppCompatActivity {
         return result;
     }
 
+    /**
+     * 获取舆情观点列表根据数据源。
+     */
     private ArrayList<Opinion> getOpinionsBySource(ArrayList<Opinion> opinions, String source) {
         ArrayList<Opinion> result = new ArrayList<Opinion>();
         for (int i = 0; i < opinions.size(); i++) {
@@ -1553,6 +1763,9 @@ public class MainActivity extends AppCompatActivity {
         return result;
     }
 
+    /**
+     * info行布局。
+     */
     private View infoRow(String label, String value) {
         LinearLayout row = vertical();
         row.setPadding(0, dp(7), 0, dp(7));
@@ -1564,20 +1777,32 @@ public class MainActivity extends AppCompatActivity {
         return row;
     }
 
+    /**
+     * section标题。
+     */
     private TextView sectionTitle(String title) {
         TextView view = text(title, 17, COLOR_TEXT, true);
         view.setIncludeFontPadding(false);
         return view;
     }
 
+    /**
+     * 弹出/显示添加股票对话框。
+     */
     private void showAddStockDialog() {
         showStockFormDialog(null);
     }
 
+    /**
+     * 弹出/显示edit股票对话框。
+     */
     private void showEditStockDialog(final Stock stock) {
         showStockFormDialog(stock);
     }
 
+    /**
+     * 弹出/显示股票form对话框。
+     */
     private void showStockFormDialog(final Stock editingStock) {
         final boolean isEdit = editingStock != null;
         LinearLayout form = vertical();
@@ -1676,6 +1901,9 @@ public class MainActivity extends AppCompatActivity {
         dialog.show();
     }
 
+    /**
+     * 弹出/显示添加分组对话框。
+     */
     private void showAddGroupDialog() {
         LinearLayout form = vertical();
         form.setPadding(dp(18), dp(8), dp(18), 0);
@@ -1711,6 +1939,9 @@ public class MainActivity extends AppCompatActivity {
         dialog.show();
     }
 
+    /**
+     * 弹出/显示添加决策笔记对话框。
+     */
     private void showAddNoteDialog(final Stock stock) {
         LinearLayout form = vertical();
         form.setPadding(dp(18), dp(8), dp(18), 0);
@@ -1781,6 +2012,9 @@ public class MainActivity extends AppCompatActivity {
         dialog.show();
     }
 
+    /**
+     * 弹出/显示新闻资讯对话框。
+     */
     private void showNewsDialog(Stock stock, News news) {
         String message = getString(R.string.news_dialog_format, news.source, news.time, news.content, stock.name, stock.code, news.keyword);
         new AlertDialog.Builder(this)
@@ -1790,6 +2024,9 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    /**
+     * 弹出/显示feed新闻资讯对话框。
+     */
     private void showFeedNewsDialog(News news) {
         String content = news.content == null ? "" : news.content.trim();
         android.util.Log.d(TAG, "showFeedNewsDialog title=" + news.title
@@ -1809,6 +2046,9 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    /**
+     * 弹出/显示舆情观点对话框。
+     */
     private void showOpinionDialog(Stock stock, Opinion opinion) {
         String message = getString(R.string.opinion_dialog_format, opinion.source, opinion.time, opinion.content, stock.name, stock.code, opinion.keyword);
         if (opinion.url.length() > 0) {
@@ -1821,6 +2061,9 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    /**
+     * 弹出/显示deepseekanalysis对话框。
+     */
     private void showDeepSeekAnalysisDialog(Stock stock) {
         if (stock == null) {
             return;
@@ -1854,6 +2097,9 @@ public class MainActivity extends AppCompatActivity {
         builder.show();
     }
 
+    /**
+     * 确认删除股票。
+     */
     private void confirmDeleteStock(final Stock stock) {
         new AlertDialog.Builder(this)
                 .setTitle(getString(R.string.delete_stock_title))
@@ -1875,6 +2121,9 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    /**
+     * 移动股票转换为edge。
+     */
     private void moveStockToEdge(Stock stock, boolean toTop) {
         if (stock == null || stock.code == null) {
             return;
@@ -1906,6 +2155,9 @@ public class MainActivity extends AppCompatActivity {
         Toast.makeText(this, moved.name + (toTop ? " 已置顶" : " 已置底"), Toast.LENGTH_SHORT).show();
     }
 
+    /**
+     * 刷新hot候选股票列表。
+     */
     private void refreshHotCandidates(final boolean manual) {
         if (loadingHotCandidates) {
             if (manual) {
@@ -1986,6 +2238,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 添加hot候选股票转换为watchlist。
+     */
     private void addHotCandidateToWatchlist(HotStockCandidate candidate) {
         if (candidate == null || candidate.code == null || candidate.code.length() == 0) {
             return;
@@ -2003,6 +2258,9 @@ public class MainActivity extends AppCompatActivity {
         showCurrentTab();
     }
 
+    /**
+     * 股票从hot候选股票。
+     */
     private Stock stockFromHotCandidate(HotStockCandidate candidate) {
         Stock stock = createDefaultStock(candidate.code, candidate.name,
                 getString(R.string.group_candidate), "");
@@ -2021,6 +2279,9 @@ public class MainActivity extends AppCompatActivity {
         return stock;
     }
 
+    /**
+     * 有效/有用的候选股票创建文本控件。
+     */
     private boolean usefulCandidateText(String value) {
         if (value == null) {
             return false;
@@ -2029,6 +2290,9 @@ public class MainActivity extends AppCompatActivity {
         return text.length() > 0 && !"--".equals(text);
     }
 
+    /**
+     * 同步hot候选股票boards转换为股票列表。
+     */
     private void syncHotCandidateBoardsToStocks(ArrayList<HotStockCandidate> candidates) {
         android.util.Log.d(BOARD_THEME_TAG, "syncHotBoard start candidateCount="
                 + (candidates == null ? 0 : candidates.size())
@@ -2072,6 +2336,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 查找股票。
+     */
     private Stock findStock(String code) {
         if (code == null) {
             return null;
@@ -2085,6 +2352,9 @@ public class MainActivity extends AppCompatActivity {
         return null;
     }
 
+    /**
+     * 加载data。
+     */
     private void loadData() {
         stocks = stockRepository.loadStocks();
         notes = stockRepository.loadNotes();
@@ -2099,14 +2369,23 @@ public class MainActivity extends AppCompatActivity {
         syncHotCandidateBoardsToStocks(hotCandidates);
     }
 
+    /**
+     * 数据填充股票列表ifempty。
+     */
     private void seedStocksIfEmpty() {
         stockRepository.seedStocksIfEmpty();
     }
 
+    /**
+     * createdefault股票。
+     */
     private Stock createDefaultStock(String code, String name, String group, String remark) {
         return stockRepository.createDefaultStock(code, name, group, remark);
     }
 
+    /**
+     * 准备详情缓存。
+     */
     private void prepareDetailCache(Stock stock) {
         DetailCache cache = stockRepository.loadDetailCache(stock.code);
         if (cache.news.size() > 0 && newsCache.get(stock.code) == null) {
@@ -2142,6 +2421,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 刷新已过期详情data。
+     */
     private void refreshExpiredDetailData(Stock stock) {
         if (isDetailCacheExpired(newsFetchedAtCache.get(stock.code))) {
             loadStockNews(stock);
@@ -2151,11 +2433,17 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 判断是否详情缓存已过期。
+     */
     private boolean isDetailCacheExpired(Long fetchedAt) {
         return fetchedAt == null || fetchedAt.longValue() <= 0L
                 || System.currentTimeMillis() - fetchedAt.longValue() > DETAIL_CACHE_TTL_MILLIS;
     }
 
+    /**
+     * 保存详情新闻资讯。
+     */
     private void saveDetailNews(Stock stock, ArrayList<News> news) {
         long nowMillis = System.currentTimeMillis();
         newsFetchedAtCache.put(stock.code, nowMillis);
@@ -2169,6 +2457,9 @@ public class MainActivity extends AppCompatActivity {
         stockRepository.saveDetailCache(cache);
     }
 
+    /**
+     * 保存详情舆情观点列表。
+     */
     private void saveDetailOpinions(Stock stock, ArrayList<Opinion> opinions) {
         long nowMillis = System.currentTimeMillis();
         opinionFetchedAtCache.put(stock.code, nowMillis);
@@ -2182,6 +2473,9 @@ public class MainActivity extends AppCompatActivity {
         stockRepository.saveDetailCache(cache);
     }
 
+    /**
+     * 保存详情analysis。
+     */
     private void saveDetailAnalysis(Stock stock, DeepSeekAnalysisResult result) {
         if (!isUsableDeepSeekAnalysis(result)) {
             analysisFetchedAtCache.remove(stock.code);
@@ -2196,16 +2490,25 @@ public class MainActivity extends AppCompatActivity {
         stockRepository.saveDetailCache(cache);
     }
 
+    /**
+     * 使失效详情analysis。
+     */
     private void invalidateDetailAnalysis(String stockCode) {
         deepSeekAnalysisCache.remove(stockCode);
         analysisFetchedAtCache.remove(stockCode);
         stockRepository.clearDetailAnalysis(stockCode);
     }
 
+    /**
+     * 判断是否可用的deepseekanalysis。
+     */
     private boolean isUsableDeepSeekAnalysis(DeepSeekAnalysisResult result) {
         return result != null && result.success && result.hasUsableFactors();
     }
 
+    /**
+     * 构建新闻资讯。
+     */
     private ArrayList<News> buildNews(Stock stock) {
         ArrayList<News> cachedNews = newsCache.get(stock.code);
         if (cachedNews != null && cachedNews.size() > 0) {
@@ -2218,6 +2521,9 @@ public class MainActivity extends AppCompatActivity {
         return stockRepository.buildNews(stock);
     }
 
+    /**
+     * 构建舆情观点列表。
+     */
     private ArrayList<Opinion> buildOpinions(Stock stock) {
         ArrayList<Opinion> cachedOpinions = opinionCache.get(stock.code);
         if (cachedOpinions != null) {
@@ -2226,6 +2532,9 @@ public class MainActivity extends AppCompatActivity {
         return new ArrayList<Opinion>();
     }
 
+    /**
+     * 加载股票新闻资讯。
+     */
     private void loadStockNews(final Stock stock) {
         if (loadingNewsCodes.contains(stock.code)) {
             android.util.Log.d(TAG, "loadStockNews ignored because loading code=" + stock.code);
@@ -2258,10 +2567,16 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 刷新新闻资讯feed。
+     */
     private void refreshNewsFeed() {
         refreshNewsFeed(true);
     }
 
+    /**
+     * 加载新闻资讯feedifneeded。
+     */
     private void loadNewsFeedIfNeeded() {
         if (!importantNewsLoadedOnce && importantNewsCache.size() == 0 && !loadingImportantNews) {
             loadImportantNews(false);
@@ -2271,6 +2586,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 刷新新闻资讯feed。
+     */
     private void refreshNewsFeed(boolean manual) {
         if (NEWS_MODE_SUBSCRIBED.equals(selectedNewsMode)) {
             loadSubscribedNews(manual);
@@ -2279,12 +2597,18 @@ public class MainActivity extends AppCompatActivity {
         loadImportantNews(manual);
     }
 
+    /**
+     * 结束新闻资讯pull刷新ifneeded。
+     */
     private void finishNewsPullRefreshIfNeeded() {
         if (currentNewsScrollView != null && currentNewsScrollView.isRefreshing()) {
             currentNewsScrollView.finishRefresh();
         }
     }
 
+    /**
+     * 加载财经要闻新闻资讯。
+     */
     private void loadImportantNews(final boolean manual) {
         if (loadingImportantNews) {
             if (manual) {
@@ -2328,6 +2652,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 加载订阅的新闻资讯。
+     */
     private void loadSubscribedNews(final boolean manual) {
         if (stocks.size() == 0) {
             if (manual) {
@@ -2388,6 +2715,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 判断是否有缺失的订阅的新闻资讯。
+     */
     private boolean hasMissingSubscribedNews() {
         if (stocks.size() == 0) {
             return false;
@@ -2400,6 +2730,9 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
 
+    /**
+     * 构建订阅的新闻资讯。
+     */
     private ArrayList<News> buildSubscribedNews() {
         ArrayList<News> result = new ArrayList<News>();
         for (int i = 0; i < stocks.size(); i++) {
@@ -2412,6 +2745,9 @@ public class MainActivity extends AppCompatActivity {
         return result;
     }
 
+    /**
+     * 添加feed新闻资讯。
+     */
     private void addFeedNews(ArrayList<News> target, ArrayList<News> source) {
         for (int i = 0; i < source.size(); i++) {
             News item = source.get(i);
@@ -2421,6 +2757,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * contains新闻资讯标题。
+     */
     private boolean containsNewsTitle(ArrayList<News> news, String title) {
         for (int i = 0; i < news.size(); i++) {
             if (title.equals(news.get(i).title)) {
@@ -2430,6 +2769,9 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
 
+    /**
+     * 加载股票舆情观点列表。
+     */
     private void loadStockOpinions(final Stock stock) {
         if (loadingOpinionCodes.contains(stock.code)) {
             return;
@@ -2457,6 +2799,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 加载deepseekanalysisifready。
+     */
     private void loadDeepSeekAnalysisIfReady(final Stock stock) {
         if (stock == null || loadingDeepSeekCodes.contains(stock.code)) {
             return;
@@ -2506,19 +2851,31 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 安全新闻资讯foranalysis。
+     */
     private ArrayList<News> safeNewsForAnalysis(Stock stock) {
         ArrayList<News> cachedNews = newsCache.get(stock.code);
         return cachedNews == null ? new ArrayList<News>() : cachedNews;
     }
 
+    /**
+     * 刷新quotes。
+     */
     private void refreshQuotes() {
         refreshQuotes(true);
     }
 
+    /**
+     * 刷新quotes。
+     */
     private void refreshQuotes(final boolean manual) {
         refreshQuotes(manual, false);
     }
 
+    /**
+     * 刷新quotesonhomeentry。
+     */
     private void refreshQuotesOnHomeEntry() {
         if (homeEntryQuotesRefreshed) {
             return;
@@ -2528,6 +2885,9 @@ public class MainActivity extends AppCompatActivity {
         refreshQuotes(false, true);
     }
 
+    /**
+     * 刷新quotes。
+     */
     private void refreshQuotes(final boolean manual, boolean force) {
         if (!force && !manual && !shouldAutoRefreshQuotes()) {
             return;
@@ -2587,6 +2947,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 刷新manual股票board主题。
+     */
     private void refreshManualStockBoardTheme(final Stock stock) {
         if (stock == null) {
             return;
@@ -2622,6 +2985,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 刷新缺失的boards。
+     */
     private void refreshMissingBoards(ArrayList<Stock> displayStocks) {
         android.util.Log.d(BOARD_THEME_TAG, "autoLookup scan start displayCount="
                 + (displayStocks == null ? 0 : displayStocks.size())
@@ -2696,6 +3062,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * shouldauto刷新quotes。
+     */
     private boolean shouldAutoRefreshQuotes() {
         Calendar now = Calendar.getInstance();
         int day = now.get(Calendar.DAY_OF_WEEK);
@@ -2709,10 +3078,16 @@ public class MainActivity extends AppCompatActivity {
                 || (minutes >= toMinutes(12, 55) && minutes <= toMinutes(15, 5));
     }
 
+    /**
+     * 转换为minutes。
+     */
     private int toMinutes(int hour, int minute) {
         return hour * 60 + minute;
     }
 
+    /**
+     * 刷新可见的quoteUI。
+     */
     private void refreshVisibleQuoteUi(boolean manual) {
         if (currentStock != null) {
             refreshDetailQuoteSections(currentStock);
@@ -2724,6 +3099,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 清除已过期watchlistaiAI机会。
+     */
     private boolean clearExpiredWatchlistAiOpportunities() {
         ArrayList<Stock> displayStocks = filterStocks();
         boolean changed = false;
@@ -2753,6 +3131,9 @@ public class MainActivity extends AppCompatActivity {
         return changed;
     }
 
+    /**
+     * 刷新详情quotesections。
+     */
     private void refreshDetailQuoteSections(Stock stock) {
         if (currentHeroContainer != null) {
             currentHeroContainer.removeAllViews();
@@ -2765,6 +3146,9 @@ public class MainActivity extends AppCompatActivity {
         refreshWinLossRatioCard(stock);
     }
 
+    /**
+     * 弹出/显示quote刷新失败结果对话框。
+     */
     private void showQuoteRefreshFailureDialog(StockQuoteFetcher.QuoteRefreshResult result) {
         StringBuilder builder = new StringBuilder();
         builder.append("当前行情主渠道：东方财富 push2\n");
@@ -2787,14 +3171,23 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    /**
+     * 过滤股票列表。
+     */
     private ArrayList<Stock> filterStocks() {
         return stockRepository.filterStocks(stocks, selectedGroup);
     }
 
+    /**
+     * 获取分组列表。
+     */
     private ArrayList<String> getGroups() {
         return stockRepository.getGroups(stocks);
     }
 
+    /**
+     * 可选的分组分组列表。
+     */
     private ArrayList<String> selectableGroups() {
         ArrayList<String> result = new ArrayList<String>();
         ArrayList<String> groups = getGroups();
@@ -2810,10 +3203,16 @@ public class MainActivity extends AppCompatActivity {
         return result;
     }
 
+    /**
+     * 判断是否有效的股票code。
+     */
     private boolean isValidStockCode(String code) {
         return code.matches("[03689][0-9]{5}");
     }
 
+    /**
+     * contains股票code。
+     */
     private boolean containsStockCode(String code) {
         for (int i = 0; i < stocks.size(); i++) {
             if (code.equals(stocks.get(i).code)) {
@@ -2823,6 +3222,9 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
 
+    /**
+     * 解析股票分组。
+     */
     private String resolveStockGroup(Spinner groupSpinner, EditText newGroup) {
         String groupText = newGroup.getText().toString().trim();
         if (groupText.length() > 0) {
@@ -2835,115 +3237,199 @@ public class MainActivity extends AppCompatActivity {
         return selected.toString().trim();
     }
 
+    /**
+     * 统计高风险股票列表。
+     */
     private int countRiskStocks() {
         return stockRepository.countRiskStocks(stocks);
     }
 
+    /**
+     * 获取决策笔记列表。
+     */
     private ArrayList<DecisionNote> getNotes(String stockCode) {
         return stockRepository.getNotes(notes, stockCode);
     }
 
+    /**
+     * 保存股票列表。
+     */
     private void saveStocks() {
         stockRepository.saveStocks(stocks);
     }
 
+    /**
+     * 保存决策笔记列表。
+     */
     private void saveNotes() {
         stockRepository.saveNotes(notes);
     }
 
+    /**
+     * 创建垂直布局。
+     */
     private LinearLayout vertical() {
         return ui.vertical();
     }
 
+    /**
+     * 创建水平布局。
+     */
     private LinearLayout horizontal() {
         return ui.horizontal();
     }
 
+    /**
+     * 创建卡片布局。
+     */
     private LinearLayout card() {
         return ui.card();
     }
 
+    /**
+     * 创建文本控件。
+     */
     private TextView text(String value, int sp, int color, boolean bold) {
         return ui.text(value, sp, color, bold);
     }
 
+    /**
+     * 创建标签控件。
+     */
     private TextView tag(String value, int bgColor, int textColor) {
         return ui.tag(value, bgColor, textColor);
     }
 
+    /**
+     * 创建输入框控件。
+     */
     private EditText input(String hint) {
         return ui.input(hint);
     }
 
+    /**
+     * 主要按钮。
+     */
     private Button primaryButton(String text) {
         return ui.primaryButton(text);
     }
 
+    /**
+     * 幽灵风格按钮。
+     */
     private Button ghostButton(String text) {
         return ui.ghostButton(text);
     }
 
+    /**
+     * 创建圆角背景。
+     */
     private GradientDrawable rounded(int color, int radius) {
         return ui.rounded(color, radius);
     }
 
+    /**
+     * 创建圆角背景描边。
+     */
     private GradientDrawable roundedStroke(int color, int radius, int strokeColor) {
         return ui.roundedStroke(color, radius, strokeColor);
     }
 
+    /**
+     * 创建间距控件。
+     */
     private View spacer(int height) {
         return ui.spacer(height);
     }
 
+    /**
+     * 创建间距控件。
+     */
     private View spacer(int width, int height) {
         return ui.spacer(width, height);
     }
 
+    /**
+     * 创建权重间距权重。
+     */
     private View spaceWeight() {
         return ui.spaceWeight();
     }
 
+    /**
+     * 填充包裹。
+     */
     private LinearLayout.LayoutParams matchWrap() {
         return ui.matchWrap();
     }
 
+    /**
+     * 填充高度。
+     */
     private LinearLayout.LayoutParams matchHeight(int height) {
         return ui.matchHeight(height);
     }
 
+    /**
+     * 包裹高度。
+     */
     private LinearLayout.LayoutParams wrapHeight(int height) {
         return ui.wrapHeight(height);
     }
 
+    /**
+     * 包裹包裹。
+     */
     private LinearLayout.LayoutParams wrapWrap() {
         return ui.wrapWrap();
     }
 
+    /**
+     * 权重包裹。
+     */
     private LinearLayout.LayoutParams weightWrap(float weight) {
         return ui.weightWrap(weight);
     }
 
+    /**
+     * 填充填充。
+     */
     private FrameLayout.LayoutParams matchMatch() {
         return ui.matchMatch();
     }
 
+    /**
+     * 页面布局参数。
+     */
     private FrameLayout.LayoutParams pageParams(boolean detailPage) {
         return ui.pageParams(detailPage);
     }
 
+    /**
+     * 将dp值转换为像素值。
+     */
     private int dp(int value) {
         return ui.dp(value);
     }
 
+    /**
+     * 获取当前时间。
+     */
     private String now() {
         return new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA).format(new Date());
     }
 
+    /**
+     * 创建文本控件ordefault。
+     */
     private String textOrDefault(EditText editText, String defaultValue) {
         String value = editText.getText().toString().trim();
         return value.length() == 0 ? defaultValue : value;
     }
 
+    /**
+     * 隐藏键盘。
+     */
     private void hideKeyboard(View view) {
         ui.hideKeyboard(view);
     }

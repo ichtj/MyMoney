@@ -21,20 +21,32 @@ public class EastmoneyHotStockSource implements HotStockSource {
     private final SimpleHttpClient httpClient = new SimpleHttpClient();
     private final HotStockSourceConfig config;
 
+    /**
+     * 构造方法：创建 EastmoneyHotStockSource 实例。
+     */
     public EastmoneyHotStockSource(HotStockSourceConfig config) {
         this.config = config;
     }
 
+    /**
+     * id。
+     */
     @Override
     public String id() {
         return config.id;
     }
 
+    /**
+     * 权重。
+     */
     @Override
     public int weight() {
         return config.weight;
     }
 
+    /**
+     * 获取。
+     */
     @Override
     public ArrayList<HotStockSourceItem> fetch() {
         ArrayList<HotStockSourceItem> result = new ArrayList<HotStockSourceItem>();
@@ -60,6 +72,9 @@ public class EastmoneyHotStockSource implements HotStockSource {
         return result;
     }
 
+    /**
+     * 获取rankchannel。
+     */
     private ArrayList<HotStockSourceItem> fetchRankChannel(HotStockSourceChannelConfig channel) {
         ArrayList<HotStockSourceItem> result = new ArrayList<HotStockSourceItem>();
         String fields = "f2,f3,f6,f8,f10,f12,f14,f20,f62,f100";
@@ -115,6 +130,9 @@ public class EastmoneyHotStockSource implements HotStockSource {
         return result;
     }
 
+    /**
+     * 获取limitup线程池。
+     */
     private ArrayList<HotStockSourceItem> fetchLimitUpPool(HotStockSourceChannelConfig channel) {
         ArrayList<HotStockSourceItem> result = new ArrayList<HotStockSourceItem>();
         String date = new SimpleDateFormat("yyyyMMdd", Locale.CHINA).format(new Date());
@@ -162,6 +180,9 @@ public class EastmoneyHotStockSource implements HotStockSource {
         return result;
     }
 
+    /**
+     * 从rankJSON。
+     */
     private HotStockSourceItem fromRankJson(JSONObject item, HotStockSourceChannelConfig channel) {
         HotStockSourceItem sourceItem = new HotStockSourceItem();
         sourceItem.code = item.optString("f12", "");
@@ -184,6 +205,9 @@ public class EastmoneyHotStockSource implements HotStockSource {
         return sourceItem;
     }
 
+    /**
+     * 从limitupJSON。
+     */
     private HotStockSourceItem fromLimitUpJson(JSONObject item, HotStockSourceChannelConfig channel) {
         HotStockSourceItem sourceItem = new HotStockSourceItem();
         sourceItem.code = firstNonEmpty(item, "c", "code");
@@ -206,6 +230,9 @@ public class EastmoneyHotStockSource implements HotStockSource {
         return sourceItem;
     }
 
+    /**
+     * 判断是否有效的。
+     */
     private boolean isValid(HotStockSourceItem item) {
         return item.code != null && item.code.length() == 6
                 && item.name != null && item.name.length() > 0
@@ -215,6 +242,9 @@ public class EastmoneyHotStockSource implements HotStockSource {
                 && isAllowedCode(item.code);
     }
 
+    /**
+     * 判断是否有ranksignal。
+     */
     private boolean hasRankSignal(HotStockSourceItem item) {
         Double amount = HotStockFormat.parseNumber(item.amount);
         Double turnoverRate = HotStockFormat.parseNumber(item.turnoverRate);
@@ -225,6 +255,9 @@ public class EastmoneyHotStockSource implements HotStockSource {
                 || (changePercent != null && changePercent != 0d);
     }
 
+    /**
+     * 获取使用retry。
+     */
     private SimpleHttpClient.HttpText getWithRetry(String url, String kind, String channelId) {
         SimpleHttpClient.HttpText response = null;
         for (int attempt = 1; attempt <= MAX_RETRY; attempt++) {
@@ -247,6 +280,9 @@ public class EastmoneyHotStockSource implements HotStockSource {
         return response;
     }
 
+    /**
+     * preview。
+     */
     private String preview(String text) {
         if (text == null || text.length() == 0) {
             return "";
@@ -255,11 +291,17 @@ public class EastmoneyHotStockSource implements HotStockSource {
         return normalized.length() > 200 ? normalized.substring(0, 200) : normalized;
     }
 
+    /**
+     * 判断是否allowedcode。
+     */
     private boolean isAllowedCode(String code) {
         return (code.startsWith("00") || code.startsWith("30") || code.startsWith("60"))
                 && !code.startsWith("688");
     }
 
+    /**
+     * 首个/第一个value。
+     */
     private Object firstValue(JSONObject object, String... keys) {
         for (int i = 0; i < keys.length; i++) {
             if (object.has(keys[i])) {
@@ -269,6 +311,9 @@ public class EastmoneyHotStockSource implements HotStockSource {
         return null;
     }
 
+    /**
+     * 首个/第一个nonempty。
+     */
     private String firstNonEmpty(JSONObject object, String... keys) {
         for (int i = 0; i < keys.length; i++) {
             String value = object.optString(keys[i], "").trim();

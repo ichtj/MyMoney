@@ -26,10 +26,16 @@ public class DeepSeekStockAnalyzer {
 
     private final SimpleHttpClient httpClient = new SimpleHttpClient();
 
+    /**
+     * 判断是否configured。
+     */
     public boolean isConfigured() {
         return BuildConfig.DEEPSEEK_API_KEY != null && BuildConfig.DEEPSEEK_API_KEY.trim().length() > 0;
     }
 
+    /**
+     * 分析。
+     */
     public DeepSeekAnalysisResult analyze(Stock stock, ArrayList<News> news,
                                           ArrayList<Opinion> opinions,
                                           ArrayList<DecisionNote> notes) {
@@ -68,6 +74,9 @@ public class DeepSeekStockAnalyzer {
         }
     }
 
+    /**
+     * 构建请求。
+     */
     private JSONObject buildRequest(Stock stock, ArrayList<News> news,
                                     ArrayList<Opinion> opinions,
                                     ArrayList<DecisionNote> notes) throws Exception {
@@ -90,6 +99,9 @@ public class DeepSeekStockAnalyzer {
         return body;
     }
 
+    /**
+     * 构建prompt。
+     */
     private String buildPrompt(Stock stock, ArrayList<News> news,
                                ArrayList<Opinion> opinions,
                                ArrayList<DecisionNote> notes) {
@@ -129,6 +141,9 @@ public class DeepSeekStockAnalyzer {
         return builder.toString();
     }
 
+    /**
+     * 解析structuredresult。
+     */
     private DeepSeekAnalysisResult parseStructuredResult(String content) {
         String json = "";
         try {
@@ -159,6 +174,9 @@ public class DeepSeekStockAnalyzer {
         }
     }
 
+    /**
+     * 解析因子。
+     */
     private DeepSeekFactorResult parseFactor(JSONObject factors, String id) {
         JSONObject object = factors.optJSONObject(id);
         if (object == null) {
@@ -190,6 +208,9 @@ public class DeepSeekStockAnalyzer {
         return new DeepSeekFactorResult(id, true, opportunity, risk, reason);
     }
 
+    /**
+     * 判断是否vaguereason。
+     */
     private boolean isVagueReason(String reason) {
         String value = nullToEmpty(reason).trim();
         if (value.length() < 12) {
@@ -207,6 +228,9 @@ public class DeepSeekStockAnalyzer {
         return false;
     }
 
+    /**
+     * extractJSON对象。
+     */
     private String extractJsonObject(String content) {
         String value = stripMarkdownFence(nullToEmpty(content).trim());
         for (int start = value.indexOf('{'); start >= 0; start = value.indexOf('{', start + 1)) {

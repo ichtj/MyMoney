@@ -5,6 +5,9 @@ import org.json.JSONObject;
 import java.util.Locale;
 
 class HotStockFormat {
+    /**
+     * 市场name。
+     */
     static String marketName(String code) {
         if (code == null) {
             return "--";
@@ -18,6 +21,9 @@ class HotStockFormat {
         return "深市";
     }
 
+    /**
+     * 格式化price。
+     */
     static String formatPrice(Object value) {
         Double number = parseNumber(value);
         if (number == null) {
@@ -26,6 +32,9 @@ class HotStockFormat {
         return String.format(Locale.CHINA, "%.2f", number);
     }
 
+    /**
+     * 格式化percent。
+     */
     static String formatPercent(Object value) {
         Double number = parseNumber(value);
         if (number == null) {
@@ -35,6 +44,9 @@ class HotStockFormat {
         return prefix + String.format(Locale.CHINA, "%.2f%%", number);
     }
 
+    /**
+     * 格式化number。
+     */
     static String formatNumber(Object value, int scale) {
         Double number = parseNumber(value);
         if (number == null) {
@@ -43,6 +55,9 @@ class HotStockFormat {
         return String.format(Locale.CHINA, "%." + scale + "f", number);
     }
 
+    /**
+     * 格式化amount。
+     */
     static String formatAmount(Object value) {
         Double number = parseNumber(value);
         if (number == null) {
@@ -57,6 +72,9 @@ class HotStockFormat {
         return String.format(Locale.CHINA, "%.0f", number);
     }
 
+    /**
+     * 解析number。
+     */
     static Double parseNumber(Object value) {
         if (value == null || JSONObject.NULL.equals(value)) {
             return null;
@@ -76,6 +94,9 @@ class HotStockFormat {
         }
     }
 
+    /**
+     * clean。
+     */
     static String clean(String value) {
         if (value == null) {
             return "--";

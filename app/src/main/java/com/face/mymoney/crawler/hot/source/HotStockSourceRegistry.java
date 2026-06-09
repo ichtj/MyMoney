@@ -5,6 +5,9 @@ import android.content.Context;
 import java.util.ArrayList;
 
 public class HotStockSourceRegistry {
+    /**
+     * create数据源列表。
+     */
     public ArrayList<HotStockSource> createSources(Context context) {
         ArrayList<HotStockSourceConfig> configs =
                 new HotStockSourceConfigLoader(context).loadEnabledConfigs();
