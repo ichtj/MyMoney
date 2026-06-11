@@ -1,9 +1,14 @@
 package com.face.mymoney.model;
 
+import androidx.room.Entity;
+import androidx.room.PrimaryKey;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
+@Entity(tableName = "notes")
 public class DecisionNote {
+    @PrimaryKey(autoGenerate = true)
     public long id;
     public String stockCode;
     public String type;

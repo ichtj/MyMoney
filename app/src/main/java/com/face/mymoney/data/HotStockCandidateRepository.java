@@ -3,56 +3,46 @@ package com.face.mymoney.data;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import com.face.mymoney.db.AppDatabase;
 import com.face.mymoney.model.HotStockCandidate;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-
 import java.util.ArrayList;
+import java.util.List;
 
 public class HotStockCandidateRepository {
     private static final String TAG = "MyMoneyHotStorage";
     private static final String PREF_NAME = "mymoney_hot_candidates";
-    private static final String KEY_CANDIDATES = "hot_candidates";
     private static final String KEY_STATUS = "hot_status";
     private static final String KEY_REFRESHED_AT = "hot_refreshed_at";
     private static final String KEY_SOURCE_SUMMARY = "hot_source_summary";
 
     private final SharedPreferences preferences;
+    private final AppDatabase db;
 
     /**
      * 构造方法：创建 HotStockCandidateRepository 实例。
      */
     public HotStockCandidateRepository(Context context) {
         preferences = context.getApplicationContext().getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        db = AppDatabase.getInstance(context);
     }
 
     /**
      * 加载候选股票列表。
      */
     public ArrayList<HotStockCandidate> loadCandidates() {
-        ArrayList<HotStockCandidate> list = new ArrayList<HotStockCandidate>();
-        try {
-            JSONArray array = new JSONArray(preferences.getString(KEY_CANDIDATES, "[]"));
-            for (int i = 0; i < array.length(); i++) {
-                list.add(HotStockCandidate.fromJson(array.getJSONObject(i)));
-            }
-        } catch (JSONException e) {
-            android.util.Log.w(TAG, "loadCandidates failed: " + e.getMessage());
-            list.clear();
-        }
-        return list;
+        List<HotStockCandidate> list = db.hotStockCandidateDao().getAllCandidates();
+        return new ArrayList<>(list);
     }
 
     /**
      * 保存候选股票列表。
      */
     public void saveCandidates(ArrayList<HotStockCandidate> candidates) {
-        JSONArray array = new JSONArray();
-        for (int i = 0; i < candidates.size(); i++) {
-            array.put(candidates.get(i).toJson());
+        db.hotStockCandidateDao().deleteAllCandidates();
+        if (candidates != null && candidates.size() > 0) {
+            db.hotStockCandidateDao().insertCandidates(candidates);
         }
-        preferences.edit().putString(KEY_CANDIDATES, array.toString()).apply();
     }
 
     /**

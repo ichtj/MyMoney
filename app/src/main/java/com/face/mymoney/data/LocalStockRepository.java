@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 import com.face.mymoney.R;
+import com.face.mymoney.ai.DeepSeekAnalysisResult;
+import com.face.mymoney.db.AppDatabase;
 import com.face.mymoney.model.DecisionNote;
 import com.face.mymoney.model.News;
 import com.face.mymoney.model.Stock;
@@ -14,19 +16,18 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 public class LocalStockRepository {
     private static final String TAG = "MyMoneyStorage";
     private static final String PREF_NAME = "mymoney_mvp";
-    private static final String KEY_STOCKS = "stocks";
-    private static final String KEY_NOTES = "notes";
     private static final String KEY_GROUPS = "groups";
     private static final String KEY_SAMPLE_CLEANED = "sample_cleaned_v1";
-    private static final String KEY_DETAIL_CACHE_PREFIX = "detail_cache_";
 
     private final Context context;
     private final SharedPreferences preferences;
+    private final AppDatabase db;
 
     /**
      * 构造方法：创建 LocalStockRepository 实例。
@@ -34,6 +35,7 @@ public class LocalStockRepository {
     public LocalStockRepository(Context context) {
         this.context = context.getApplicationContext();
         preferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        db = AppDatabase.getInstance(this.context);
     }
 
     /**
@@ -47,14 +49,16 @@ public class LocalStockRepository {
      * 加载股票列表。
      */
     public ArrayList<Stock> loadStocks() {
-        return parseStocks(preferences.getString(KEY_STOCKS, "[]"));
+        List<Stock> list = db.stockDao().getAllStocks();
+        return new ArrayList<>(list);
     }
 
     /**
      * 加载决策笔记列表。
      */
     public ArrayList<DecisionNote> loadNotes() {
-        return parseNotes(preferences.getString(KEY_NOTES, "[]"));
+        List<DecisionNote> list = db.decisionNoteDao().getAllNotes();
+        return new ArrayList<>(list);
     }
 
     /**
@@ -68,16 +72,31 @@ public class LocalStockRepository {
      * 加载详情缓存。
      */
     public DetailCache loadDetailCache(String stockCode) {
-        String json = preferences.getString(detailCacheKey(stockCode), "");
-        if (json.length() == 0) {
-            return new DetailCache();
+        DetailCacheEntity entity = db.detailCacheDao().getDetailCache(stockCode);
+        if (entity == null) {
+            DetailCache cache = new DetailCache();
+            cache.stockCode = stockCode;
+            return cache;
         }
+        DetailCache cache = new DetailCache();
+        cache.stockCode = entity.stockCode;
+        cache.newsFetchedAt = entity.newsFetchedAt;
+        cache.opinionFetchedAt = entity.opinionFetchedAt;
+        cache.analysisFetchedAt = entity.analysisFetchedAt;
         try {
-            return DetailCache.fromJson(new JSONObject(json));
-        } catch (JSONException e) {
-            android.util.Log.w(TAG, "loadDetailCache failed code=" + stockCode + ": " + e.getMessage());
-            return new DetailCache();
+            if (entity.newsJson != null && entity.newsJson.length() > 0) {
+                cache.news = DetailCache.parseNews(new JSONArray(entity.newsJson));
+            }
+            if (entity.opinionsJson != null && entity.opinionsJson.length() > 0) {
+                cache.opinions = DetailCache.parseOpinions(new JSONArray(entity.opinionsJson));
+            }
+            if (entity.analysisJson != null && entity.analysisJson.length() > 0) {
+                cache.analysis = DeepSeekAnalysisResult.fromJson(new JSONObject(entity.analysisJson));
+            }
+        } catch (Exception e) {
+            android.util.Log.w(TAG, "parseDetailCache failed stockCode=" + stockCode + ": " + e.getMessage());
         }
+        return cache;
     }
 
     /**
@@ -87,7 +106,15 @@ public class LocalStockRepository {
         if (cache == null || cache.stockCode == null || cache.stockCode.length() == 0) {
             return;
         }
-        preferences.edit().putString(detailCacheKey(cache.stockCode), cache.toJson().toString()).apply();
+        DetailCacheEntity entity = new DetailCacheEntity();
+        entity.stockCode = cache.stockCode;
+        entity.newsFetchedAt = cache.newsFetchedAt;
+        entity.opinionFetchedAt = cache.opinionFetchedAt;
+        entity.analysisFetchedAt = cache.analysisFetchedAt;
+        entity.newsJson = cache.news != null ? DetailCache.newsToJson(cache.news).toString() : "[]";
+        entity.opinionsJson = cache.opinions != null ? DetailCache.opinionsToJson(cache.opinions).toString() : "[]";
+        entity.analysisJson = cache.analysis != null ? cache.analysis.toJson().toString() : "";
+        db.detailCacheDao().insertDetailCache(entity);
     }
 
     /**
@@ -105,22 +132,20 @@ public class LocalStockRepository {
      * 保存股票列表。
      */
     public void saveStocks(ArrayList<Stock> stocks) {
-        JSONArray array = new JSONArray();
-        for (int i = 0; i < stocks.size(); i++) {
-            array.put(stocks.get(i).toJson());
+        db.stockDao().deleteAllStocks();
+        if (stocks != null && stocks.size() > 0) {
+            db.stockDao().insertStocks(stocks);
         }
-        preferences.edit().putString(KEY_STOCKS, array.toString()).apply();
     }
 
     /**
      * 保存决策笔记列表。
      */
     public void saveNotes(ArrayList<DecisionNote> notes) {
-        JSONArray array = new JSONArray();
-        for (int i = 0; i < notes.size(); i++) {
-            array.put(notes.get(i).toJson());
+        db.decisionNoteDao().deleteAllNotes();
+        if (notes != null && notes.size() > 0) {
+            db.decisionNoteDao().insertNotes(notes);
         }
-        preferences.edit().putString(KEY_NOTES, array.toString()).apply();
     }
 
     /**
@@ -138,23 +163,13 @@ public class LocalStockRepository {
             return;
         }
         ArrayList<Stock> stocks = loadStocks();
-        boolean changed = false;
         for (int i = stocks.size() - 1; i >= 0; i--) {
             Stock stock = stocks.get(i);
             if (isSampleStock(stock)) {
-                stocks.remove(i);
-                changed = true;
+                db.stockDao().deleteStock(stock);
             }
         }
-        SharedPreferences.Editor editor = preferences.edit().putBoolean(KEY_SAMPLE_CLEANED, true);
-        if (changed) {
-            JSONArray array = new JSONArray();
-            for (int i = 0; i < stocks.size(); i++) {
-                array.put(stocks.get(i).toJson());
-            }
-            editor.putString(KEY_STOCKS, array.toString());
-        }
-        editor.apply();
+        preferences.edit().putBoolean(KEY_SAMPLE_CLEANED, true).apply();
     }
 
     /**
@@ -299,13 +314,6 @@ public class LocalStockRepository {
     }
 
     /**
-     * 详情缓存key。
-     */
-    private String detailCacheKey(String stockCode) {
-        return KEY_DETAIL_CACHE_PREFIX + (stockCode == null ? "" : stockCode);
-    }
-
-    /**
      * 判断是否sample股票。
      */
     private boolean isSampleStock(Stock stock) {
@@ -326,40 +334,6 @@ public class LocalStockRepository {
             }
         }
         preferences.edit().putString(KEY_GROUPS, array.toString()).apply();
-    }
-
-    /**
-     * 解析股票列表。
-     */
-    private ArrayList<Stock> parseStocks(String json) {
-        ArrayList<Stock> list = new ArrayList<Stock>();
-        try {
-            JSONArray array = new JSONArray(json);
-            for (int i = 0; i < array.length(); i++) {
-                list.add(Stock.fromJson(array.getJSONObject(i)));
-            }
-        } catch (JSONException e) {
-            android.util.Log.w(TAG, "parseStocks failed: " + e.getMessage());
-            list.clear();
-        }
-        return list;
-    }
-
-    /**
-     * 解析决策笔记列表。
-     */
-    private ArrayList<DecisionNote> parseNotes(String json) {
-        ArrayList<DecisionNote> list = new ArrayList<DecisionNote>();
-        try {
-            JSONArray array = new JSONArray(json);
-            for (int i = 0; i < array.length(); i++) {
-                list.add(DecisionNote.fromJson(array.getJSONObject(i)));
-            }
-        } catch (JSONException e) {
-            android.util.Log.w(TAG, "parseNotes failed: " + e.getMessage());
-            list.clear();
-        }
-        return list;
     }
 
     /**

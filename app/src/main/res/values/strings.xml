@@ -78,13 +78,13 @@
     <string name="note_meta_format">目标价 %1$s · 止损价 %2$s · 信心 %3$s/10</string>
     <string name="add_stock_title">添加自选股</string>
     <string name="edit_stock_title">编辑自选股</string>
-    <string name="stock_code_hint">股票代码，如 300308</string>
-    <string name="stock_name_hint">股票名称，如 中际旭创</string>
+    <string name="stock_code_hint">股票代码，可只填代码，如 300308</string>
+    <string name="stock_name_hint">股票名称，可只填名称，如 中际旭创</string>
     <string name="stock_group_hint">分组，如 短线观察</string>
     <string name="stock_remark_hint">备注，如 AI 算力方向，观察回调</string>
     <string name="cancel">取消</string>
     <string name="save">保存</string>
-    <string name="stock_required">股票代码和名称不能为空</string>
+    <string name="stock_required">请输入股票代码或名称</string>
     <string name="stock_code_invalid">股票代码需为 6 位数字，且以 0、3、6、8、9 开头</string>
     <string name="stock_duplicate">该股票已在自选股中</string>
     <string name="add_note_title">新增决策记录</string>

@@ -1,9 +1,16 @@
 package com.face.mymoney.model;
 
+import androidx.annotation.NonNull;
+import androidx.room.Entity;
+import androidx.room.PrimaryKey;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
+@Entity(tableName = "hot_candidates")
 public class HotStockCandidate {
+    @PrimaryKey
+    @NonNull
     public String code;
     public String name;
     public String market;

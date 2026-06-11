@@ -19,6 +19,7 @@ import com.face.mymoney.R;
 import com.face.mymoney.model.DecisionNote;
 import com.face.mymoney.model.MarketIndexQuote;
 import com.face.mymoney.model.Stock;
+import com.face.mymoney.realtime.RealtimeDecisionAnalyzer;
 import com.face.mymoney.ui.MainUiKit;
 import com.face.mymoney.ui.StockDisplayText;
 
@@ -199,6 +200,12 @@ public class HomePageBuilder {
         card.addView(title, ui.matchWrap());
         card.addView(ui.spacer(ui.dp(5)));
         card.addView(sub, ui.matchWrap());
+        RealtimeDecisionAnalyzer.MarketPulse pulse = RealtimeDecisionAnalyzer.analyzeMarket(marketIndices);
+        card.addView(ui.spacer(ui.dp(5)));
+        TextView marketStatus = ui.text("即时环境：" + pulse.status + " · " + pulse.summary,
+                12, marketStatusColor(pulse.level), true);
+        marketStatus.setLineSpacing(ui.dp(2), 1.0f);
+        card.addView(marketStatus, ui.matchWrap());
         card.addView(ui.spacer(ui.dp(8)));
 
         HorizontalScrollView scroll = new HorizontalScrollView(context);
@@ -216,6 +223,19 @@ public class HomePageBuilder {
         scroll.addView(metrics, ui.wrapWrap());
         card.addView(scroll, ui.matchWrap());
         return card;
+    }
+
+    private int marketStatusColor(int level) {
+        if (level == RealtimeDecisionAnalyzer.LEVEL_GOOD) {
+            return Color.rgb(255, 138, 128);
+        }
+        if (level == RealtimeDecisionAnalyzer.LEVEL_RISK) {
+            return Color.rgb(96, 211, 148);
+        }
+        if (level == RealtimeDecisionAnalyzer.LEVEL_WAIT) {
+            return Color.rgb(251, 191, 36);
+        }
+        return Color.rgb(203, 213, 225);
     }
 
     private View metricBox(String title, String value, String changePercent) {
@@ -395,6 +415,15 @@ public class HomePageBuilder {
                 + " · " + getNotes(stock.code).size() + "记";
         TextView metaView = singleLineText(meta, 11, COLOR_SUB, false);
         nameBox.addView(metaView, ui.matchWrap());
+        RealtimeDecisionAnalyzer.IntradayState intraday = RealtimeDecisionAnalyzer.analyzeStockIntraday(stock);
+        LinearLayout intradayRow = ui.horizontal();
+        intradayRow.setGravity(Gravity.CENTER_VERTICAL);
+        intradayRow.addView(intradayChip(intraday.status, intraday.level), ui.wrapWrap());
+        intradayRow.addView(ui.spacer(ui.dp(6), 1));
+        intradayRow.addView(singleLineText(intraday.summary, 11, COLOR_SUB, false),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        nameBox.addView(ui.spacer(ui.dp(3)));
+        nameBox.addView(intradayRow, ui.matchWrap());
         row.addView(nameBox, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
         LinearLayout quoteBox = ui.vertical();
@@ -412,6 +441,40 @@ public class HomePageBuilder {
         wrapper.addView(card, ui.weightWrap(1));
         wrapper.addView(actionPanel(stock), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT));
         return wrapper;
+    }
+
+    private TextView intradayChip(String value, int level) {
+        TextView chip = singleLineText(value, 10, intradayTextColor(level), true);
+        chip.setGravity(Gravity.CENTER);
+        chip.setPadding(ui.dp(7), ui.dp(3), ui.dp(7), ui.dp(3));
+        chip.setBackground(ui.rounded(intradaySoftColor(level), ui.dp(10)));
+        return chip;
+    }
+
+    private int intradaySoftColor(int level) {
+        if (level == RealtimeDecisionAnalyzer.LEVEL_GOOD) {
+            return Color.rgb(254, 242, 242);
+        }
+        if (level == RealtimeDecisionAnalyzer.LEVEL_RISK) {
+            return Color.rgb(240, 253, 244);
+        }
+        if (level == RealtimeDecisionAnalyzer.LEVEL_WAIT) {
+            return Color.rgb(255, 247, 237);
+        }
+        return COLOR_ACCENT_SOFT;
+    }
+
+    private int intradayTextColor(int level) {
+        if (level == RealtimeDecisionAnalyzer.LEVEL_GOOD) {
+            return COLOR_RISE;
+        }
+        if (level == RealtimeDecisionAnalyzer.LEVEL_RISK) {
+            return COLOR_FALL;
+        }
+        if (level == RealtimeDecisionAnalyzer.LEVEL_WAIT) {
+            return COLOR_NEUTRAL;
+        }
+        return COLOR_ACCENT;
     }
 
     private TextView boardThemeTag(Stock stock) {

@@ -59,7 +59,7 @@ public class DetailCache {
     /**
      * 新闻资讯转换为JSON。
      */
-    private static JSONArray newsToJson(ArrayList<News> news) {
+    public static JSONArray newsToJson(ArrayList<News> news) {
         JSONArray array = new JSONArray();
         for (int i = 0; i < news.size(); i++) {
             array.put(news.get(i).toJson());
@@ -70,7 +70,7 @@ public class DetailCache {
     /**
      * 舆情观点列表转换为JSON。
      */
-    private static JSONArray opinionsToJson(ArrayList<Opinion> opinions) {
+    public static JSONArray opinionsToJson(ArrayList<Opinion> opinions) {
         JSONArray array = new JSONArray();
         for (int i = 0; i < opinions.size(); i++) {
             array.put(opinions.get(i).toJson());
@@ -81,7 +81,7 @@ public class DetailCache {
     /**
      * 解析新闻资讯。
      */
-    private static ArrayList<News> parseNews(JSONArray array) {
+    public static ArrayList<News> parseNews(JSONArray array) {
         ArrayList<News> list = new ArrayList<News>();
         if (array == null) {
             return list;
@@ -98,7 +98,7 @@ public class DetailCache {
     /**
      * 解析舆情观点列表。
      */
-    private static ArrayList<Opinion> parseOpinions(JSONArray array) {
+    public static ArrayList<Opinion> parseOpinions(JSONArray array) {
         ArrayList<Opinion> list = new ArrayList<Opinion>();
         if (array == null) {
             return list;
