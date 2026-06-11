@@ -437,6 +437,10 @@ public class MainViewModel extends AndroidViewModel {
         backgroundExecutor.execute(new Runnable() {
             @Override
             public void run() {
+                ArrayList<Stock> boardTargets = new ArrayList<>();
+                boardTargets.add(stock);
+                StockBoardFetcher boardFetcher = new StockBoardFetcher();
+                boardFetcher.refreshBoards(boardTargets);
                 StockQuoteFetcher fetcher = new StockQuoteFetcher();
                 final StockQuoteFetcher.QuoteResult result = fetcher.refreshQuoteDetailed(stock);
                 loadingBoardCodes.remove(stock.code);
@@ -578,12 +582,13 @@ public class MainViewModel extends AndroidViewModel {
         boolean changed = false;
         for (int i = 0; i < candidates.size(); i++) {
             HotStockCandidate candidate = candidates.get(i);
-            if (candidate == null || !usefulCandidateText(candidate.industry)) {
+            String board = candidateBoardText(candidate);
+            if (candidate == null || !usefulCandidateText(board)) {
                 continue;
             }
             Stock stock = findStock(candidate.code);
             if (stock != null && !StockDisplayText.hasBoard(stock)) {
-                stock.industry = candidate.industry.trim();
+                stock.industry = board;
                 changed = true;
             }
         }
@@ -613,7 +618,24 @@ public class MainViewModel extends AndroidViewModel {
             return false;
         }
         String text = value.trim();
-        return text.length() > 0 && !"--".equals(text);
+        return text.length() > 0
+                && !"--".equals(text)
+                && !"-".equals(text)
+                && !text.contains("待同步")
+                && !text.contains("寰呭悓姝");
+    }
+
+    private String candidateBoardText(HotStockCandidate candidate) {
+        if (candidate == null) {
+            return "";
+        }
+        if (usefulCandidateText(candidate.industry)) {
+            return candidate.industry.trim();
+        }
+        if (usefulCandidateText(candidate.concept)) {
+            return candidate.concept.trim();
+        }
+        return "";
     }
 
     public boolean shouldAutoRefreshQuotes() {

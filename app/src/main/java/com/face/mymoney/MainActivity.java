@@ -115,6 +115,7 @@ public class MainActivity extends AppCompatActivity {
     private HashSet<String> loadingOpinionCodes = new HashSet<String>();
     private HashSet<String> loadingDeepSeekCodes = new HashSet<String>();
     private HashSet<String> loadingBoardCodes = new HashSet<String>();
+    private HashSet<String> addingStockCodes = new HashSet<String>();
     private boolean loadingImportantNews;
     private boolean loadingSubscribedNewsFeed;
     private boolean importantNewsLoadedOnce;
@@ -2493,6 +2494,10 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 final StockLookupFetcher.StockIdentity identity = resolveStockIdentity(codeText, nameText);
+                final Stock createdStock = identity == null
+                        ? null
+                        : stockFromIdentity(identity, groupText, remarkText);
+                ensureStockRealtimeBeforeAdd(createdStock);
                 runOnUiIfAlive(new Runnable() {
                     @Override
                     public void run() {
@@ -2509,9 +2514,9 @@ public class MainActivity extends AppCompatActivity {
                             Toast.makeText(MainActivity.this, getString(R.string.stock_duplicate), Toast.LENGTH_SHORT).show();
                             return;
                         }
-                        Stock createdStock = createDefaultStock(identity.code, identity.name, groupText, remarkText);
-                        if (identity.market.length() > 0) {
-                            createdStock.market = identity.market;
+                        if (createdStock == null) {
+                            Toast.makeText(MainActivity.this, "股票信息解析失败，请重试", Toast.LENGTH_SHORT).show();
+                            return;
                         }
                         stockRepository.saveGroupIfNeeded(groupText);
                         stocks.add(0, createdStock);
@@ -2525,6 +2530,36 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    /**
+     * 根据已解析身份创建自选股。
+     */
+    private Stock stockFromIdentity(StockLookupFetcher.StockIdentity identity, String groupText, String remarkText) {
+        Stock stock = createDefaultStock(identity.code, identity.name, groupText, remarkText);
+        if (identity.market.length() > 0) {
+            stock.market = identity.market;
+        }
+        if (usefulCandidateText(identity.industry)) {
+            stock.industry = identity.industry.trim();
+        }
+        return stock;
+    }
+
+    /**
+     * 添加前同步行业/板块，避免刚加入列表就显示待同步行业。
+     */
+    private void ensureStockRealtimeBeforeAdd(Stock stock) {
+        if (stock == null) {
+            return;
+        }
+        new StockQuoteFetcher().refreshQuoteDetailed(stock);
+        if (StockDisplayText.hasBoard(stock)) {
+            return;
+        }
+        ArrayList<Stock> targets = new ArrayList<Stock>();
+        targets.add(stock);
+        new StockBoardFetcher().refreshBoards(targets);
     }
 
     /**
@@ -2548,7 +2583,8 @@ public class MainActivity extends AppCompatActivity {
             HotStockCandidate candidate = hotCandidates.get(i);
             if ((code.length() > 0 && code.equals(candidate.code))
                     || (name.length() > 0 && name.equals(candidate.name))) {
-                return new StockLookupFetcher.StockIdentity(candidate.code, candidate.name, candidate.market);
+                return new StockLookupFetcher.StockIdentity(candidate.code, candidate.name,
+                        candidate.market, candidateBoardText(candidate));
             }
         }
         if (code.length() > 0 && name.length() > 0) {
@@ -2836,13 +2872,36 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, getString(R.string.stock_duplicate), Toast.LENGTH_SHORT).show();
             return;
         }
-        Stock stock = stockFromHotCandidate(candidate);
-        stocks.add(0, stock);
-        stockRepository.saveGroupIfNeeded(stock.groupName);
-        saveStocks();
-        Toast.makeText(this, "已加入自选：" + stock.name, Toast.LENGTH_SHORT).show();
-        rememberHotScroll();
-        showCurrentTab();
+        if (addingStockCodes.contains(candidate.code)) {
+            Toast.makeText(this, "正在同步行情和行业标识", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        addingStockCodes.add(candidate.code);
+        Toast.makeText(this, "正在同步行情和行业标识", Toast.LENGTH_SHORT).show();
+        final HotStockCandidate target = candidate;
+        runInBackground(new Runnable() {
+            @Override
+            public void run() {
+                final Stock stock = stockFromHotCandidate(target);
+                ensureStockRealtimeBeforeAdd(stock);
+                runOnUiIfAlive(new Runnable() {
+                    @Override
+                    public void run() {
+                        addingStockCodes.remove(target.code);
+                        if (containsStockCode(target.code)) {
+                            Toast.makeText(MainActivity.this, getString(R.string.stock_duplicate), Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        stocks.add(0, stock);
+                        stockRepository.saveGroupIfNeeded(stock.groupName);
+                        saveStocks();
+                        Toast.makeText(MainActivity.this, "已加入自选：" + stock.name, Toast.LENGTH_SHORT).show();
+                        rememberHotScroll();
+                        showCurrentTab();
+                    }
+                });
+            }
+        });
     }
 
     /**
@@ -2855,7 +2914,10 @@ public class MainActivity extends AppCompatActivity {
         stock.price = candidate.price;
         stock.changePercent = candidate.changePercent;
         stock.turnover = candidate.turnoverRate;
-        stock.industry = candidate.industry;
+        String board = candidateBoardText(candidate);
+        if (usefulCandidateText(board)) {
+            stock.industry = board;
+        }
         stock.mainBusiness = "Top50热股候选：" + candidate.reason;
         stock.marketValue = candidate.amount;
         stock.pe = "量比 " + candidate.volumeRatio;
@@ -2867,6 +2929,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
+     * 候选股可用板块文本。
+     */
+    private String candidateBoardText(HotStockCandidate candidate) {
+        if (candidate == null) {
+            return "";
+        }
+        if (usefulCandidateText(candidate.industry)) {
+            return candidate.industry.trim();
+        }
+        if (usefulCandidateText(candidate.concept)) {
+            return candidate.concept.trim();
+        }
+        return "";
+    }
+
+    /**
      * 有效/有用的候选股票创建文本控件。
      */
     private boolean usefulCandidateText(String value) {
@@ -2874,7 +2952,11 @@ public class MainActivity extends AppCompatActivity {
             return false;
         }
         String text = value.trim();
-        return text.length() > 0 && !"--".equals(text);
+        return text.length() > 0
+                && !"--".equals(text)
+                && !"-".equals(text)
+                && !text.contains("待同步")
+                && !text.contains("寰呭悓姝");
     }
 
     /**
@@ -2890,23 +2972,26 @@ public class MainActivity extends AppCompatActivity {
         boolean changed = false;
         for (int i = 0; i < candidates.size(); i++) {
             HotStockCandidate candidate = candidates.get(i);
-            if (candidate == null || !usefulCandidateText(candidate.industry)) {
+            String board = candidateBoardText(candidate);
+            if (candidate == null || !usefulCandidateText(board)) {
                 if (candidate != null) {
                     android.util.Log.d(BOARD_THEME_TAG, "syncHotBoard skip candidateNoIndustry code="
-                            + candidate.code + ", industry=" + candidate.industry);
+                            + candidate.code + ", industry=" + candidate.industry
+                            + ", concept=" + candidate.concept);
                 }
                 continue;
             }
             Stock stock = findStock(candidate.code);
             if (stock != null && !StockDisplayText.hasBoard(stock)) {
-                stock.industry = candidate.industry.trim();
+                stock.industry = board;
                 changed = true;
                 android.util.Log.d(BOARD_THEME_TAG, "syncHotBoard code=" + stock.code
                         + ", industry=" + stock.industry);
             } else if (stock != null) {
                 android.util.Log.d(BOARD_THEME_TAG, "syncHotBoard skip stockAlreadyHasBoard code="
                         + stock.code + ", stockIndustry=" + stock.industry
-                        + ", candidateIndustry=" + candidate.industry);
+                        + ", candidateIndustry=" + candidate.industry
+                        + ", candidateConcept=" + candidate.concept);
             }
         }
         if (changed) {

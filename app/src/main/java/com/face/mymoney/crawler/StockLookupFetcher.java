@@ -38,16 +38,16 @@ public class StockLookupFetcher {
                 }
                 return quoted;
             }
-            return new StockIdentity(code, name.length() == 0 ? code : name, marketName(code));
+            return new StockIdentity(code, name.length() == 0 ? code : name, marketName(code), "");
         }
         if (name.length() == 0) {
             return null;
         }
         StockIdentity searched = searchEastmoney(name);
         if (searched != null) {
-            return searched;
+            return enrichByCode(searched);
         }
-        return searchTencent(name);
+        return enrichByCode(searchTencent(name));
     }
 
     /**
@@ -56,7 +56,7 @@ public class StockLookupFetcher {
     private StockIdentity fetchByCode(String code) {
         String url = "https://push2.eastmoney.com/api/qt/stock/get?secid="
                 + secId(code)
-                + "&fields=f57,f58,f100";
+                + "&fields=f57,f58,f100,f127,f128,f129";
         try {
             SimpleHttpClient.HttpText response = httpClient.get(url, TIMEOUT_MILLIS, MAX_READ_BYTES,
                     "application/json,text/plain,*/*", USER_AGENT);
@@ -78,7 +78,8 @@ public class StockLookupFetcher {
             if (name.length() == 0) {
                 return null;
             }
-            return new StockIdentity(fetchedCode, name, marketName(fetchedCode));
+            String industry = boardTextFromStockGet(data);
+            return new StockIdentity(fetchedCode, name, marketName(fetchedCode), usefulIndustry(industry) ? industry : "");
         } catch (Exception e) {
             android.util.Log.w(TAG, "quote lookup failed code=" + code
                     + ", error=" + e.getClass().getSimpleName() + ": " + safeMessage(e));
@@ -177,7 +178,9 @@ public class StockLookupFetcher {
         if (!isAllowedCode(code) || name.length() == 0) {
             return null;
         }
-        return new StockIdentity(code, name, marketName(code));
+        String industry = cleanText(firstNonEmpty(object,
+                "Industry", "industry", "INDUSTRY", "BKName", "bkName", "f127", "f100"));
+        return new StockIdentity(code, name, marketName(code), usefulIndustry(industry) ? industry : "");
     }
 
     /**
@@ -213,10 +216,27 @@ public class StockLookupFetcher {
                 }
             }
             if (isAllowedCode(code) && name.length() > 0 && !containsCode(result, code)) {
-                result.add(new StockIdentity(code, name, marketName(code)));
+                result.add(new StockIdentity(code, name, marketName(code), ""));
             }
         }
         return result;
+    }
+
+    private StockIdentity enrichByCode(StockIdentity identity) {
+        if (identity == null || !isAllowedCode(identity.code)) {
+            return identity;
+        }
+        if (usefulIndustry(identity.industry)) {
+            return identity;
+        }
+        StockIdentity quoted = fetchByCode(identity.code);
+        if (quoted == null) {
+            return identity;
+        }
+        if (identity.name.length() > 0) {
+            quoted.name = identity.name;
+        }
+        return quoted;
     }
 
     /**
@@ -299,6 +319,43 @@ public class StockLookupFetcher {
         return code != null && code.matches("[03689][0-9]{5}");
     }
 
+    private boolean usefulIndustry(String value) {
+        String text = cleanText(value);
+        return text.length() > 0
+                && !"--".equals(text)
+                && !"-".equals(text)
+                && !text.matches("[-+]?\\d+(\\.\\d+)?")
+                && !text.contains("待同步")
+                && !text.contains("寰呭悓姝");
+    }
+
+    private String boardTextFromStockGet(JSONObject data) {
+        String industry = cleanText(data.optString("f127", ""));
+        if (usefulIndustry(industry)) {
+            return industry;
+        }
+        industry = cleanText(data.optString("f100", ""));
+        if (usefulIndustry(industry)) {
+            return industry;
+        }
+        return firstConcept(data.optString("f129", ""));
+    }
+
+    private String firstConcept(String concepts) {
+        String text = cleanText(concepts);
+        if (!usefulIndustry(text)) {
+            return "";
+        }
+        String[] parts = text.split("[,，]");
+        for (int i = 0; i < parts.length; i++) {
+            String part = cleanText(parts[i]);
+            if (usefulIndustry(part)) {
+                return part;
+            }
+        }
+        return text;
+    }
+
     private String secId(String code) {
         return (code.startsWith("6") || code.startsWith("9") ? "1." : "0.") + code;
     }
@@ -323,11 +380,17 @@ public class StockLookupFetcher {
         public final String code;
         public String name;
         public final String market;
+        public final String industry;
 
         public StockIdentity(String code, String name, String market) {
+            this(code, name, market, "");
+        }
+
+        public StockIdentity(String code, String name, String market, String industry) {
             this.code = code == null ? "" : code;
             this.name = name == null ? "" : name;
             this.market = market == null ? "" : market;
+            this.industry = industry == null ? "" : industry;
         }
     }
 }

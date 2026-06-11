@@ -110,7 +110,7 @@ public class StockBoardFetcher {
             }
             String url = "https://push2.eastmoney.com/api/qt/stock/get?secid="
                     + secId(stock.code)
-                    + "&fields=f57,f58,f100";
+                    + "&fields=f57,f58,f100,f127,f128,f129";
             try {
                 SimpleHttpClient.HttpText response = httpClient.get(url, TIMEOUT_MILLIS, MAX_READ_BYTES,
                         "application/json,text/plain,*/*", USER_AGENT);
@@ -121,9 +121,12 @@ public class StockBoardFetcher {
                     continue;
                 }
                 JSONObject data = new JSONObject(response.body).optJSONObject("data");
-                String industry = data == null ? "" : cleanText(data.optString("f100", ""));
+                String industry = data == null ? "" : boardTextFromStockGet(data);
                 android.util.Log.d(TAG, "eastmoneyQuote parsed code=" + stock.code
                         + ", rawF100=" + (data == null ? "" : data.optString("f100", ""))
+                        + ", rawF127=" + (data == null ? "" : data.optString("f127", ""))
+                        + ", rawF128=" + (data == null ? "" : data.optString("f128", ""))
+                        + ", rawF129=" + (data == null ? "" : data.optString("f129", ""))
                         + ", parsedIndustry=" + industry
                         + ", oldIndustry=" + stock.industry);
                 if (usefulIndustry(industry) && updateStockIndustry(stocks, stock.code, industry, "eastmoneyQuote")) {
@@ -174,6 +177,39 @@ public class StockBoardFetcher {
     }
 
     /**
+     * 从东方财富单股接口提取板块/行业。
+     */
+    private String boardTextFromStockGet(JSONObject data) {
+        String industry = cleanText(data.optString("f127", ""));
+        if (usefulIndustry(industry)) {
+            return industry;
+        }
+        industry = cleanText(data.optString("f100", ""));
+        if (usefulIndustry(industry)) {
+            return industry;
+        }
+        return firstConcept(data.optString("f129", ""));
+    }
+
+    /**
+     * 获取第一个概念作为兜底板块。
+     */
+    private String firstConcept(String concepts) {
+        String text = cleanText(concepts);
+        if (!usefulIndustry(text)) {
+            return "";
+        }
+        String[] parts = text.split("[,，]");
+        for (int i = 0; i < parts.length; i++) {
+            String part = cleanText(parts[i]);
+            if (usefulIndustry(part)) {
+                return part;
+            }
+        }
+        return text;
+    }
+
+    /**
      * secid。
      */
     private String secId(String code) {
@@ -200,6 +236,7 @@ public class StockBoardFetcher {
         return text.length() > 0
                 && !"--".equals(text)
                 && !"-".equals(text)
+                && !text.matches("[-+]?\\d+(\\.\\d+)?")
                 && !text.contains("待同步")
                 && !text.contains("寰呭悓姝");
     }
