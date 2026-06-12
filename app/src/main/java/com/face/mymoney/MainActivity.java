@@ -40,6 +40,7 @@ import com.face.mymoney.crawler.GeneralFinanceNewsFetcher;
 import com.face.mymoney.crawler.HotStockCandidateFetcher;
 import com.face.mymoney.crawler.MarketIndexFetcher;
 import com.face.mymoney.crawler.StockBoardFetcher;
+import com.face.mymoney.crawler.StockKLineFetcher;
 import com.face.mymoney.crawler.StockLookupFetcher;
 import com.face.mymoney.crawler.StockNewsFetcher;
 import com.face.mymoney.crawler.StockQuoteFetcher;
@@ -48,6 +49,7 @@ import com.face.mymoney.data.HotStockCandidateRepository;
 import com.face.mymoney.data.LocalStockRepository;
 import com.face.mymoney.model.DecisionNote;
 import com.face.mymoney.model.HotStockCandidate;
+import com.face.mymoney.model.KLineItem;
 import com.face.mymoney.model.MarketIndexQuote;
 import com.face.mymoney.model.News;
 import com.face.mymoney.model.Stock;
@@ -62,6 +64,7 @@ import com.face.mymoney.ui.StockDisplayText;
 import com.face.mymoney.ui.detail.WinLossRatioCard;
 import com.face.mymoney.ui.home.HomePageBuilder;
 import com.face.mymoney.ui.login.LoginPageBuilder;
+import com.face.mymoney.ui.widget.KLineChartView;
 import com.face.mymoney.ui.widget.PullRefreshScrollView;
 
 import java.text.SimpleDateFormat;
@@ -94,6 +97,7 @@ public class MainActivity extends AppCompatActivity {
     private static final long QUOTE_AUTO_REFRESH_MILLIS = 10000L;
     private static final long QUOTE_AUTO_REFRESH_IDLE_MILLIS = 5 * 60 * 1000L;
     private static final long DETAIL_CACHE_TTL_MILLIS = 15 * 60 * 1000L;
+    private static final long KLINE_CACHE_TTL_MILLIS = 30 * 60 * 1000L;
 
     private MainViewModel viewModel;
     private LocalAuthManager authManager;
@@ -108,13 +112,17 @@ public class MainActivity extends AppCompatActivity {
     private HashMap<String, ArrayList<News>> newsCache = new HashMap<String, ArrayList<News>>();
     private HashMap<String, ArrayList<Opinion>> opinionCache = new HashMap<String, ArrayList<Opinion>>();
     private HashMap<String, DeepSeekAnalysisResult> deepSeekAnalysisCache = new HashMap<String, DeepSeekAnalysisResult>();
+    private HashMap<String, ArrayList<KLineItem>> kLineCache = new HashMap<String, ArrayList<KLineItem>>();
     private HashMap<String, Long> newsFetchedAtCache = new HashMap<String, Long>();
     private HashMap<String, Long> opinionFetchedAtCache = new HashMap<String, Long>();
     private HashMap<String, Long> analysisFetchedAtCache = new HashMap<String, Long>();
+    private HashMap<String, Long> kLineFetchedAtCache = new HashMap<String, Long>();
+    private HashMap<String, String> kLineErrorCache = new HashMap<String, String>();
     private HashSet<String> loadingNewsCodes = new HashSet<String>();
     private HashSet<String> loadingOpinionCodes = new HashSet<String>();
     private HashSet<String> loadingDeepSeekCodes = new HashSet<String>();
     private HashSet<String> loadingBoardCodes = new HashSet<String>();
+    private HashSet<String> loadingKLineCodes = new HashSet<String>();
     private HashSet<String> addingStockCodes = new HashSet<String>();
     private boolean loadingImportantNews;
     private boolean loadingSubscribedNewsFeed;
@@ -134,6 +142,7 @@ public class MainActivity extends AppCompatActivity {
     private int pendingWatchlistScrollY = -1;
     private int pendingHotScrollY = -1;
     private LinearLayout currentHeroContainer;
+    private LinearLayout currentKLineContainer;
     private LinearLayout currentRealtimeContainer;
     private LinearLayout currentCompanyContainer;
     private LinearLayout currentWinLossContainer;
@@ -230,6 +239,7 @@ public class MainActivity extends AppCompatActivity {
             public void onChanged(ArrayList<Stock> newStocks) {
                 stocks = newStocks;
                 if (currentStock == null && TAB_WATCHLIST.equals(currentTab)) {
+                    rememberWatchlistScroll();
                     showCurrentTab();
                 }
             }
@@ -1770,6 +1780,11 @@ public class MainActivity extends AppCompatActivity {
         page.addView(currentHeroContainer, matchWrap());
         page.addView(spacer(10));
 
+        currentKLineContainer = vertical();
+        currentKLineContainer.addView(kLineCard(stock), matchWrap());
+        page.addView(currentKLineContainer, matchWrap());
+        page.addView(spacer(10));
+
         currentRealtimeContainer = vertical();
         currentRealtimeContainer.addView(realtimeDecisionCard(stock), matchWrap());
         page.addView(currentRealtimeContainer, matchWrap());
@@ -1821,6 +1836,7 @@ public class MainActivity extends AppCompatActivity {
                 1));
         root.addView(detailShell, matchMatch());
         restoreDetailScroll(scrollView);
+        loadStockKLineIfNeeded(stock, false);
         refreshExpiredDetailData(stock);
         loadDeepSeekAnalysisIfReady(stock);
     }
@@ -1872,6 +1888,148 @@ public class MainActivity extends AppCompatActivity {
         sub.addView(text(/*getString(R.string.stock_board) + " " + */stockBoardText(stock), 12, Color.rgb(203, 213, 225), false), wrapWrap());
         hero.addView(sub, matchWrap());
         return hero;
+    }
+
+    /**
+     * K-line chart card.
+     */
+    private View kLineCard(final Stock stock) {
+        LinearLayout card = card();
+        card.setPadding(dp(14), dp(12), dp(14), dp(12));
+
+        LinearLayout header = horizontal();
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout titleBox = vertical();
+        titleBox.addView(text("\u65e5 K \u7ebf", 18, COLOR_TEXT, true), matchWrap());
+        titleBox.addView(text("\u8fd1 120 \u4e2a\u4ea4\u6613\u65e5\uff0c\u53ef\u6a2a\u5411\u6ed1\u52a8\u67e5\u770b\u65e7\u6570\u636e", 12, COLOR_SUB, false), matchWrap());
+        header.addView(titleBox, weightWrap(1));
+        Button refresh = ghostButton(loadingKLineCodes.contains(stock.code)
+                ? "\u52a0\u8f7d\u4e2d"
+                : "\u5237\u65b0K\u7ebf");
+        refresh.setEnabled(!loadingKLineCodes.contains(stock.code));
+        refresh.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                loadStockKLine(stock, true);
+            }
+        });
+        header.addView(refresh, wrapHeight(dp(34)));
+        card.addView(header, matchWrap());
+        card.addView(spacer(10));
+
+        KLineChartView chartView = new KLineChartView(this);
+        chartView.setKLines(kLineCache.get(stock.code));
+        chartView.setLoading(loadingKLineCodes.contains(stock.code));
+        chartView.setErrorMessage(kLineErrorCache.get(stock.code));
+        card.addView(chartView, new LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(240)));
+
+        card.addView(spacer(6));
+        card.addView(text(kLineStatusText(stock), 11, COLOR_SUB, false), matchWrap());
+        return card;
+    }
+
+    /**
+     * Refresh K-line chart card.
+     */
+    private void refreshKLineCard(Stock stock) {
+        if (currentKLineContainer == null || stock == null) {
+            return;
+        }
+        currentKLineContainer.removeAllViews();
+        currentKLineContainer.addView(kLineCard(stock), matchWrap());
+    }
+
+    /**
+     * Load K-line if missing or expired.
+     */
+    private void loadStockKLineIfNeeded(Stock stock, boolean manual) {
+        if (stock == null || stock.code == null) {
+            return;
+        }
+        ArrayList<KLineItem> cached = kLineCache.get(stock.code);
+        Long fetchedAt = kLineFetchedAtCache.get(stock.code);
+        if (!manual && cached != null && cached.size() > 0 && !isKLineCacheExpired(fetchedAt)) {
+            return;
+        }
+        loadStockKLine(stock, manual);
+    }
+
+    /**
+     * Load daily K-line data.
+     */
+    private void loadStockKLine(final Stock stock, final boolean manual) {
+        if (stock == null || stock.code == null) {
+            return;
+        }
+        if (loadingKLineCodes.contains(stock.code)) {
+            return;
+        }
+        loadingKLineCodes.add(stock.code);
+        kLineErrorCache.remove(stock.code);
+        refreshKLineCard(stock);
+        if (manual) {
+            Toast.makeText(this, "\u6b63\u5728\u5237\u65b0K\u7ebf", Toast.LENGTH_SHORT).show();
+        }
+        runInBackground(new Runnable() {
+            @Override
+            public void run() {
+                final StockKLineFetcher.KLineResult result = new StockKLineFetcher().fetchDailyKLine(stock, 120);
+                runOnUiIfAlive(new Runnable() {
+                    @Override
+                    public void run() {
+                        loadingKLineCodes.remove(stock.code);
+                        if (result.success && result.items.size() > 0) {
+                            kLineCache.put(stock.code, result.items);
+                            kLineFetchedAtCache.put(stock.code, System.currentTimeMillis());
+                            kLineErrorCache.remove(stock.code);
+                            if (manual) {
+                                Toast.makeText(MainActivity.this, "\u004b\u7ebf\u5df2\u66f4\u65b0", Toast.LENGTH_SHORT).show();
+                            }
+                        } else {
+                            kLineErrorCache.put(stock.code, result.message);
+                            if (manual) {
+                                Toast.makeText(MainActivity.this, "\u004b\u7ebf\u83b7\u53d6\u5931\u8d25", Toast.LENGTH_SHORT).show();
+                            }
+                        }
+                        if (currentStock != null && stock.code.equals(currentStock.code)) {
+                            refreshKLineCard(stock);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    /**
+     * K-line cache timeout.
+     */
+    private boolean isKLineCacheExpired(Long fetchedAt) {
+        return fetchedAt == null || fetchedAt.longValue() <= 0L
+                || System.currentTimeMillis() - fetchedAt.longValue() > KLINE_CACHE_TTL_MILLIS;
+    }
+
+    /**
+     * K-line status text.
+     */
+    private String kLineStatusText(Stock stock) {
+        String text = "\u6570\u636e\u6e90\uff1a\u4e1c\u65b9\u8d22\u5bcc\u5386\u53f2\u884c\u60c5";
+        if (stock == null || stock.code == null) {
+            return text;
+        }
+        ArrayList<KLineItem> items = kLineCache.get(stock.code);
+        if (items != null && items.size() > 0) {
+            text = text + " | " + items.size() + " \u6761";
+        }
+        Long fetchedAt = kLineFetchedAtCache.get(stock.code);
+        if (fetchedAt != null && fetchedAt.longValue() > 0L) {
+            text = text + " | \u66f4\u65b0 " + new SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(new Date(fetchedAt.longValue()));
+        }
+        if (loadingKLineCodes.contains(stock.code)) {
+            text = text + " | \u52a0\u8f7d\u4e2d";
+        }
+        return text;
     }
 
     /**
@@ -2013,6 +2171,7 @@ public class MainActivity extends AppCompatActivity {
         refreshDetailQuoteSections(stock);
         refreshManualStockBoardTheme(stock);
         refreshQuotes(false, true);
+        loadStockKLine(stock, false);
         loadStockNews(stock);
         loadStockOpinions(stock);
     }
@@ -4267,7 +4426,7 @@ public class MainActivity extends AppCompatActivity {
             refreshDetailQuoteSections(currentStock);
             return;
         }
-        if (TAB_WATCHLIST.equals(currentTab) && (manual || clearExpiredWatchlistAiOpportunities())) {
+        if (TAB_WATCHLIST.equals(currentTab) && clearExpiredWatchlistAiOpportunities()) {
             rememberWatchlistScroll();
             showCurrentTab();
         }

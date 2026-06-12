@@ -400,9 +400,6 @@ public class MainViewModel extends AndroidViewModel {
 
     public void refreshQuotes(final boolean manual, final boolean force) {
         final ArrayList<Stock> currentStocks = stocks.getValue();
-        if (!force && !manual && !shouldAutoRefreshQuotes()) {
-            return;
-        }
         if (Boolean.TRUE.equals(refreshingQuotes.getValue())) {
             return;
         }
@@ -422,6 +419,7 @@ public class MainViewModel extends AndroidViewModel {
                 
                 if (currentStocks != null) {
                     stockRepository.saveStocks(currentStocks);
+                    stocks.postValue(new ArrayList<Stock>(currentStocks));
                 }
                 
                 quoteRefreshEvent.postValue(new QuoteRefreshEvent(manual, force, result, fetchedIndices));
