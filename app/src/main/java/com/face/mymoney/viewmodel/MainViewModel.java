@@ -400,6 +400,13 @@ public class MainViewModel extends AndroidViewModel {
 
     public void refreshQuotes(final boolean manual, final boolean force) {
         final ArrayList<Stock> currentStocks = stocks.getValue();
+        if (currentStocks == null || currentStocks.size() == 0) {
+            if (manual || force) {
+                quoteRefreshEvent.postValue(new QuoteRefreshEvent(manual, force,
+                        new StockQuoteFetcher.QuoteRefreshResult(0), new ArrayList<MarketIndexQuote>()));
+            }
+            return;
+        }
         if (Boolean.TRUE.equals(refreshingQuotes.getValue())) {
             return;
         }

@@ -311,7 +311,7 @@ public class StockQuoteFetcher {
         public int successCount;
         public final ArrayList<QuoteFailure> failedItems = new ArrayList<QuoteFailure>();
 
-        QuoteRefreshResult(int totalCount) {
+        public QuoteRefreshResult(int totalCount) {
             this.totalCount = totalCount;
         }
     }

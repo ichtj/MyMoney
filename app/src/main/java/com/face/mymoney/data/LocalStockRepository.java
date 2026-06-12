@@ -131,11 +131,16 @@ public class LocalStockRepository {
     /**
      * 保存股票列表。
      */
-    public void saveStocks(ArrayList<Stock> stocks) {
-        db.stockDao().deleteAllStocks();
-        if (stocks != null && stocks.size() > 0) {
-            db.stockDao().insertStocks(stocks);
-        }
+    public void saveStocks(final ArrayList<Stock> stocks) {
+        db.runInTransaction(new Runnable() {
+            @Override
+            public void run() {
+                db.stockDao().deleteAllStocks();
+                if (stocks != null && stocks.size() > 0) {
+                    db.stockDao().insertStocks(stocks);
+                }
+            }
+        });
     }
 
     /**
@@ -163,6 +168,16 @@ public class LocalStockRepository {
             return;
         }
         ArrayList<Stock> stocks = loadStocks();
+        int sampleCount = 0;
+        for (int i = 0; i < stocks.size(); i++) {
+            if (isSampleStock(stocks.get(i))) {
+                sampleCount++;
+            }
+        }
+        if (sampleCount == 0 || sampleCount < stocks.size()) {
+            preferences.edit().putBoolean(KEY_SAMPLE_CLEANED, true).apply();
+            return;
+        }
         for (int i = stocks.size() - 1; i >= 0; i--) {
             Stock stock = stocks.get(i);
             if (isSampleStock(stock)) {

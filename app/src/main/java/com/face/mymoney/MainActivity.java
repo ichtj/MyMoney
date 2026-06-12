@@ -1423,6 +1423,7 @@ public class MainActivity extends AppCompatActivity {
         card.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                rememberHotScroll();
                 showStockDetail(stockFromHotCandidate(candidate));
             }
         });
@@ -4026,6 +4027,7 @@ public class MainActivity extends AppCompatActivity {
      * 加载data。
      */
     private void loadData() {
+        viewModel.loadData();
         stocks = stockRepository.loadStocks();
         notes = stockRepository.loadNotes();
         hotCandidates = hotStockRepository.loadCandidates();
