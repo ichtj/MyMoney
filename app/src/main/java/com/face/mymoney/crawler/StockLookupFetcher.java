@@ -38,7 +38,18 @@ public class StockLookupFetcher {
                 }
                 return quoted;
             }
-            return new StockIdentity(code, name.length() == 0 ? code : name, marketName(code), "");
+            StockIdentity searched = searchEastmoney(code);
+            if (searched != null && searched.name.length() > 0 && !searched.name.equals(code)) {
+                return searched;
+            }
+            searched = searchTencent(code);
+            if (searched != null && searched.name.length() > 0 && !searched.name.equals(code)) {
+                return searched;
+            }
+            if (name.length() > 0) {
+                return new StockIdentity(code, name, marketName(code), "");
+            }
+            return null;
         }
         if (name.length() == 0) {
             return null;

@@ -598,20 +598,81 @@ public class RealtimeDecisionAnalyzer {
             return insight;
         }
 
+        // Calculate effective weighted counts for news items based on freshness
+        double effPositive = 0;
+        double effRisk = 0;
+        double effHardRisk = 0;
+        double effDirect = 0;
+        
+        long now = System.currentTimeMillis();
+        boolean hasFreshNews = false; // whether we have any news that is today or fresher
+        
+        if (news != null) {
+            for (int i = 0; i < news.size(); i++) {
+                News item = news.get(i);
+                int freshness = getNewsFreshnessCategory(item, now);
+                double weight = 1.0;
+                if (freshness == FRESHNESS_JUST_NOW || freshness == FRESHNESS_WITHIN_HOUR) {
+                    weight = 1.0;
+                    hasFreshNews = true;
+                } else if (freshness == FRESHNESS_TODAY) {
+                    weight = 0.5; // weight reduced
+                    hasFreshNews = true;
+                } else {
+                    weight = 0.0; // display only, does not affect judgment
+                }
+
+                EventSignal signal = classifyEvent(stock, safe(item.title) + " " + safe(item.content));
+                if ("硬风险".equals(signal.category)) {
+                    effHardRisk += weight;
+                    effRisk += weight;
+                } else if ("风险".equals(signal.category)) {
+                    effRisk += weight;
+                } else if ("正面".equals(signal.category)) {
+                    effPositive += weight;
+                }
+                if (signal.direct) {
+                    effDirect += weight;
+                }
+            }
+        }
+
+        // Include opinions with default weight 1.0 (since they represent analysis)
+        if (opinions != null) {
+            for (int i = 0; i < opinions.size(); i++) {
+                Opinion item = opinions.get(i);
+                EventSignal signal = classifyEvent(stock, safe(item.title) + " " + safe(item.content));
+                double weight = 1.0;
+                if ("硬风险".equals(signal.category)) {
+                    effHardRisk += weight;
+                    effRisk += weight;
+                } else if ("风险".equals(signal.category)) {
+                    effRisk += weight;
+                } else if ("正面".equals(signal.category)) {
+                    effPositive += weight;
+                }
+                if (signal.direct) {
+                    effDirect += weight;
+                }
+            }
+        }
+
         String relevance = insight.directCount > 0
                 ? "直接相关"
                 : insight.industryCount > 0 ? "行业相关" : "相关性偏弱";
         String reaction = priceReaction(stock, insight);
-        if (insight.hardRiskCount > 0) {
+
+        // Classify using effective weighted counts
+        if (effHardRisk >= 0.5) {
             insight.status = "硬风险优先";
             insight.level = LEVEL_RISK;
-        } else if (insight.riskCount > 0 && insight.riskCount >= insight.positiveCount) {
+        } else if (effRisk >= 0.5 && effRisk >= effPositive) {
             insight.status = "风险事件";
             insight.level = LEVEL_RISK;
-        } else if (insight.positiveCount >= 2 && insight.directCount > 0) {
+        } else if (effPositive >= 1.5 && effDirect > 0) {
             insight.status = "强正面增量";
             insight.level = LEVEL_GOOD;
-        } else if (insight.positiveCount > insight.riskCount && insight.directCount > 0) {
+        } else if (effPositive >= 0.5 && effPositive > effRisk && effDirect > 0) {
             insight.status = "正面增量";
             insight.level = LEVEL_GOOD;
         } else if (insight.themeCount > 0 && insight.directCount == 0) {
@@ -621,9 +682,18 @@ public class RealtimeDecisionAnalyzer {
             insight.status = "中性观察";
             insight.level = LEVEL_NEUTRAL;
         }
-        insight.summary = relevance + "，正面 " + insight.positiveCount
-                + "，风险 " + insight.riskCount
-                + "，硬风险 " + insight.hardRiskCount + "。";
+
+        // If we only have stale news and no strong opinions, override to Wait/Stale
+        if (news != null && news.size() > 0 && !hasFreshNews && (opinions == null || opinions.size() == 0)) {
+            insight.status = "事件已过时";
+            insight.summary = "新闻均为历史资讯，不作为当前操作依据。";
+            insight.level = LEVEL_WAIT;
+        } else {
+            insight.summary = relevance + "，正面 " + (int)insight.positiveCount
+                    + "，风险 " + (int)insight.riskCount
+                    + "，硬风险 " + (int)insight.hardRiskCount + "。";
+        }
+        
         insight.detail = "事件类型：" + eventTypeText(insight)
                 + "；价格反应：" + reaction
                 + "；证据：" + joinLimited(insight.evidence, "、", "暂无明确关键词");
@@ -1035,6 +1105,311 @@ public class RealtimeDecisionAnalyzer {
         public String riskText = "";
         public String factorDiscipline = "";
         public int level = LEVEL_NEUTRAL;
+    }
+
+    public static final int FRESHNESS_JUST_NOW = 4;
+    public static final int FRESHNESS_WITHIN_HOUR = 3;
+    public static final int FRESHNESS_TODAY = 2;
+    public static final int FRESHNESS_OLDER = 1;
+    public static final int FRESHNESS_UNKNOWN = 0;
+
+    public static int getNewsFreshnessCategory(News item, long nowMillis) {
+        if (item == null || item.time == null || item.time.trim().length() == 0) {
+            return FRESHNESS_UNKNOWN;
+        }
+        String timeStr = item.time.trim();
+        long pubMillis = parseNewsTimeToMillis(timeStr, nowMillis);
+        if (pubMillis <= 0) {
+            return FRESHNESS_UNKNOWN;
+        }
+
+        long diff = nowMillis - pubMillis;
+        if (diff < 0) {
+            return FRESHNESS_JUST_NOW;
+        }
+
+        if (diff <= 15 * 60 * 1000L) {
+            return FRESHNESS_JUST_NOW;
+        }
+        if (diff <= 60 * 60 * 1000L) {
+            return FRESHNESS_WITHIN_HOUR;
+        }
+        if (isSameCalendarDay(pubMillis, nowMillis)) {
+            return FRESHNESS_TODAY;
+        }
+        return FRESHNESS_OLDER;
+    }
+
+    public static String getFreshnessLabel(News item, long nowMillis) {
+        int cat = getNewsFreshnessCategory(item, nowMillis);
+        if (cat == FRESHNESS_JUST_NOW) {
+            return "刚刚";
+        }
+        if (cat == FRESHNESS_WITHIN_HOUR) {
+            long pub = parseNewsTimeToMillis(item.time, nowMillis);
+            long mins = (nowMillis - pub) / 60000L;
+            return mins > 0 ? mins + "分钟前" : "刚刚";
+        }
+        if (cat == FRESHNESS_TODAY) {
+            return "今日";
+        }
+        if (cat == FRESHNESS_OLDER) {
+            return "较旧";
+        }
+        return "时间未知";
+    }
+
+    private static long parseNewsTimeToMillis(String timeStr, long nowMillis) {
+        if (timeStr == null || timeStr.length() == 0) {
+            return 0L;
+        }
+        try {
+            if (timeStr.matches("\\d{10,13}")) {
+                long t = Long.parseLong(timeStr);
+                if (timeStr.length() == 10) {
+                    t *= 1000L;
+                }
+                return t;
+            }
+        } catch (Exception ignored) {}
+
+        java.util.Calendar now = java.util.Calendar.getInstance(java.util.Locale.CHINA);
+        now.setTimeInMillis(nowMillis);
+        int currentYear = now.get(java.util.Calendar.YEAR);
+
+        try {
+            if (timeStr.length() >= 16 && timeStr.contains("-") && timeStr.indexOf('-') == 4) {
+                String pattern = timeStr.length() >= 19 ? "yyyy-MM-dd HH:mm:ss" : "yyyy-MM-dd HH:mm";
+                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat(pattern, java.util.Locale.CHINA);
+                return sdf.parse(timeStr).getTime();
+            } else if (timeStr.contains("-") && timeStr.indexOf('-') == 2) {
+                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.CHINA);
+                String fullTimeStr = currentYear + "-" + timeStr;
+                return sdf.parse(fullTimeStr).getTime();
+            } else if (timeStr.contains(":") && !timeStr.contains("-")) {
+                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.CHINA);
+                java.text.SimpleDateFormat dateSdf = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.CHINA);
+                String datePrefix = dateSdf.format(new java.util.Date(nowMillis));
+                String fullTimeStr = datePrefix + " " + (timeStr.length() > 5 ? timeStr.substring(0, 5) : timeStr);
+                return sdf.parse(fullTimeStr).getTime();
+            }
+        } catch (Exception ignored) {}
+
+        return 0L;
+    }
+
+    private static boolean isSameCalendarDay(long t1, long t2) {
+        java.util.Calendar cal1 = java.util.Calendar.getInstance(java.util.Locale.CHINA);
+        java.util.Calendar cal2 = java.util.Calendar.getInstance(java.util.Locale.CHINA);
+        cal1.setTimeInMillis(t1);
+        cal2.setTimeInMillis(t2);
+        return cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
+               cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR);
+    }
+
+    public static class NewsValClassification {
+        public String category = "";
+        public int priority = 1;
+        public String matchedKeyword = "";
+        public String relationType = "";
+        public int level = LEVEL_WAIT;
+        public String impactObject = "";
+        public ArrayList<Stock> matchedStocks = new ArrayList<Stock>();
+
+        public NewsValClassification(String category, int priority, String matchedKeyword, String relationType, int level, String impactObject) {
+            this.category = category;
+            this.priority = priority;
+            this.matchedKeyword = matchedKeyword;
+            this.relationType = relationType;
+            this.level = level;
+            this.impactObject = impactObject;
+        }
+    }
+
+    public static NewsValClassification classifyNews(News item, ArrayList<Stock> stocks) {
+        if (item == null) {
+            return new NewsValClassification("弱相关", 1, "", "弱相关", LEVEL_WAIT, "未识别到明确影响对象");
+        }
+        NewsValClassification cl = classifyNewsInternal(item, stocks);
+        if (cl != null && stocks != null) {
+            String title = item.title == null ? "" : item.title;
+            String content = item.content == null ? "" : item.content;
+            String keyword = item.keyword == null ? "" : item.keyword;
+            String text = (title + " " + keyword + " " + content).toUpperCase(Locale.US);
+            for (int i = 0; i < stocks.size(); i++) {
+                Stock s = stocks.get(i);
+                if ((s.name != null && s.name.length() > 0 && text.contains(s.name.toUpperCase(Locale.US))) || 
+                    (s.code != null && s.code.length() > 0 && text.contains(s.code.toUpperCase(Locale.US)))) {
+                    boolean exists = false;
+                    for (int k = 0; k < cl.matchedStocks.size(); k++) {
+                        if (cl.matchedStocks.get(k).name.equals(s.name)) {
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (!exists) {
+                        cl.matchedStocks.add(s);
+                    }
+                }
+            }
+        }
+        return cl;
+    }
+
+    private static NewsValClassification classifyNewsInternal(News item, ArrayList<Stock> stocks) {
+        if (item == null) {
+            return new NewsValClassification("弱相关", 1, "", "弱相关", LEVEL_WAIT, "未识别到明确影响对象");
+        }
+        String title = item.title == null ? "" : item.title;
+        String content = item.content == null ? "" : item.content;
+        String keyword = item.keyword == null ? "" : item.keyword;
+        String text = (title + " " + keyword + " " + content).toUpperCase(Locale.US);
+
+        // --- Step 2: Identify impact targets ---
+        ArrayList<String> matchedStocksList = new ArrayList<String>();
+        if (stocks != null) {
+            for (int i = 0; i < stocks.size(); i++) {
+                Stock s = stocks.get(i);
+                if ((s.name != null && s.name.length() > 0 && text.contains(s.name.toUpperCase(Locale.US))) || 
+                    (s.code != null && s.code.length() > 0 && text.contains(s.code.toUpperCase(Locale.US)))) {
+                    if (!matchedStocksList.contains(s.name)) {
+                        matchedStocksList.add(s.name);
+                    }
+                }
+            }
+        }
+
+        ArrayList<String> matchedIndustriesList = new ArrayList<String>();
+        if (stocks != null) {
+            for (int i = 0; i < stocks.size(); i++) {
+                Stock s = stocks.get(i);
+                if (s.industry != null && s.industry.length() > 0 && text.contains(s.industry.toUpperCase(Locale.US))) {
+                    if (!matchedIndustriesList.contains(s.industry)) {
+                        matchedIndustriesList.add(s.industry);
+                    }
+                }
+            }
+        }
+
+        ArrayList<String> matchedThemesList = new ArrayList<String>();
+        String[] themeKeywords = {
+            "AI", "算力", "半导体", "机器人", "低空经济", "新能源", "光模块", "CPO", "数据中心", "存储", "芯片", "军工", "消费电子", "人工智能", "低空", "商业航天", "固态电池", "大模型", "低空飞行", "新质生产力", "人形机器人"
+        };
+        for (int i = 0; i < themeKeywords.length; i++) {
+            if (text.contains(themeKeywords[i].toUpperCase(Locale.US))) {
+                matchedThemesList.add(themeKeywords[i]);
+            }
+        }
+
+        ArrayList<String> matchedMarketList = new ArrayList<String>();
+        String[] marketKeywords = {
+            "政策", "利率", "汇率", "外围", "美联储", "降息", "加息", "央行", "财政部", "发改委", "降准", "社融", "CPI", "PPI", "GDP", "关税", "国常会", "牛市", "大盘", "A股", "指数", "外资", "主力资金", "证监会", "人民币", "美股", "港股", "加税", "降税", "扶持", "刺激"
+        };
+        for (int i = 0; i < marketKeywords.length; i++) {
+            if (text.contains(marketKeywords[i].toUpperCase(Locale.US))) {
+                matchedMarketList.add(marketKeywords[i]);
+            }
+        }
+
+        // Combine into impactObject
+        ArrayList<String> components = new ArrayList<String>();
+        if (matchedStocksList.size() > 0) {
+            components.add(joinStrings(matchedStocksList, ", "));
+        }
+        if (matchedIndustriesList.size() > 0) {
+            components.add(joinStrings(matchedIndustriesList, ", "));
+        }
+        if (matchedThemesList.size() > 0) {
+            components.add(joinStrings(matchedThemesList, ", "));
+        }
+        if (matchedMarketList.size() > 0) {
+            components.add(joinStrings(matchedMarketList, ", "));
+        }
+
+        String impactObject = "";
+        if (components.size() > 0) {
+            impactObject = joinStrings(components, " / ");
+        } else {
+            impactObject = "未识别到明确影响对象";
+        }
+
+        // --- Step 1: Classification ---
+        // 1. Check Hard Risk first (Highest Priority)
+        String[] hardRiskKeywords = {
+            "减持", "清仓", "立案", "监管", "诉讼", "退市", "处罚", "问询", "被执行", "冻结", "爆雷", "债务", "违约", "质押", "稽查", "警示", "通报", "违规", "立案调查", "封杀", "禁令", "黑名单"
+        };
+        String matchedHardRisk = firstKeyword(text, hardRiskKeywords);
+        if (matchedHardRisk.length() > 0) {
+            return new NewsValClassification("硬风险", 7, matchedHardRisk, "最高优先级", LEVEL_RISK, impactObject);
+        }
+
+        // Check stock name / code (Direct relation)
+        boolean direct = matchedStocksList.size() > 0;
+        String matchedStock = direct ? matchedStocksList.get(0) : "";
+
+        // Check industry / sector (Industry relation)
+        boolean industry = matchedIndustriesList.size() > 0;
+        String matchedIndustry = industry ? matchedIndustriesList.get(0) : "";
+
+        // Check macro keywords (Market relation)
+        String matchedMacro = matchedMarketList.size() > 0 ? matchedMarketList.get(0) : "";
+
+        // Classify based on the relations and content keywords
+        String[] riskKeywords = {
+            "亏损", "预亏", "业绩下滑", "下降", "不及预期", "解禁", "高管离职", "毛利率下降", "商誉", "减值", "下滑", "受阻", "纠纷"
+        };
+        String[] positiveKeywords = {
+            "订单", "中标", "合同", "签约", "增持", "回购", "分红", "业绩预增", "预增", "增长", "涨价", "获批", "批复", "合作", "突破", "扩产", "新产品", "大增", "重组", "定增", "首发", "发布会"
+        };
+
+        String matchedRisk = firstKeyword(text, riskKeywords);
+        String matchedPositive = firstKeyword(text, positiveKeywords);
+        String matchedTheme = matchedThemesList.size() > 0 ? matchedThemesList.get(0) : "";
+
+        if (direct) {
+            if (matchedRisk.length() > 0) {
+                return new NewsValClassification("风险事件", 6, matchedRisk, "直接相关(" + matchedStock + ")", LEVEL_RISK, impactObject);
+            } else if (matchedPositive.length() > 0) {
+                return new NewsValClassification("正面增量", 5, matchedPositive, "直接相关(" + matchedStock + ")", LEVEL_GOOD, impactObject);
+            } else if (matchedTheme.length() > 0) {
+                return new NewsValClassification("题材催化", 4, matchedTheme, "直接相关(" + matchedStock + ")", LEVEL_NEUTRAL, impactObject);
+            } else {
+                return new NewsValClassification("中性相关", 2, "", "直接相关(" + matchedStock + ")", LEVEL_NEUTRAL, impactObject);
+            }
+        }
+
+        if (industry) {
+            if (matchedRisk.length() > 0) {
+                return new NewsValClassification("风险事件", 6, matchedRisk, "行业相关(" + matchedIndustry + ")", LEVEL_RISK, impactObject);
+            } else if (matchedPositive.length() > 0) {
+                return new NewsValClassification("正面增量", 5, matchedPositive, "行业相关(" + matchedIndustry + ")", LEVEL_GOOD, impactObject);
+            } else if (matchedTheme.length() > 0) {
+                return new NewsValClassification("题材催化", 4, matchedTheme, "行业相关(" + matchedIndustry + ")", LEVEL_NEUTRAL, impactObject);
+            } else {
+                return new NewsValClassification("中性相关", 2, "", "行业相关(" + matchedIndustry + ")", LEVEL_NEUTRAL, impactObject);
+            }
+        }
+
+        if (matchedMacro.length() > 0) {
+            return new NewsValClassification("宏观影响", 3, matchedMacro, "市场相关", LEVEL_NEUTRAL, impactObject);
+        }
+
+        // If it doesn't match direct stock, industry, or macro, it's weakly related (弱相关)
+        return new NewsValClassification("弱相关", 1, "", "弱相关", LEVEL_WAIT, impactObject);
+    }
+
+    private static String joinStrings(ArrayList<String> list, String delimiter) {
+        if (list == null || list.size() == 0) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < list.size(); i++) {
+            if (i > 0) {
+                sb.append(delimiter);
+            }
+            sb.append(list.get(i));
+        }
+        return sb.toString();
     }
 
     public static class NewsEventInsight {

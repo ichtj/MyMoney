@@ -122,6 +122,8 @@ public class MainActivity extends AppCompatActivity {
     private boolean subscribedNewsLoadedOnce;
     private boolean refreshingQuotes;
     private boolean loadingHotCandidates;
+    private boolean weakNewsExpanded = false;
+    private News linkedNewsEvent;
     private String hotDataStatus = "";
     private long hotDataRefreshedAtMillis;
     private String hotDataSourceSummary = "";
@@ -143,6 +145,8 @@ public class MainActivity extends AppCompatActivity {
     private String selectedNewsMode = NEWS_MODE_IMPORTANT;
     private LinearLayout tabContent;
     private String selectedGroup = "";
+    private boolean watchlistManageMode;
+    private HashSet<String> managedWatchlistStockCodes = new HashSet<String>();
     private Stock currentStock;
     private MainUiKit ui;
     private OnBackPressedCallback detailBackCallback;
@@ -491,6 +495,7 @@ public class MainActivity extends AppCompatActivity {
      */
     private void leaveStockDetail() {
         currentStock = null;
+        linkedNewsEvent = null;
         setDetailBackEnabled(false);
         showMainShell();
     }
@@ -632,6 +637,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onGroupSelected(String group) {
                 selectedGroup = group;
+                managedWatchlistStockCodes.clear();
                 showCurrentTab();
             }
 
@@ -661,6 +667,37 @@ public class MainActivity extends AppCompatActivity {
             public void onMoveStockBottom(Stock stock) {
                 moveStockToEdge(stock, false);
             }
+
+            @Override
+            public void onManageModeChanged(boolean enabled) {
+                setWatchlistManageMode(enabled);
+            }
+
+            @Override
+            public void onManageStockToggled(Stock stock) {
+                toggleManagedWatchlistStock(stock);
+            }
+
+            @Override
+            public void onManageSelectAll() {
+                selectAllManagedWatchlistStocks();
+            }
+
+            @Override
+            public void onManageClearSelection() {
+                clearManagedWatchlistStocks();
+            }
+
+            @Override
+            public void onManageDeleteSelected() {
+                confirmDeleteManagedWatchlistStocks();
+            }
+
+            @Override
+            public void onManageMoveSelected() {
+                showMoveManagedWatchlistStocksDialog();
+            }
+
             @Override
             public void onDebugRequested() {
                 if (BuildConfig.DEBUG) {
@@ -669,7 +706,8 @@ public class MainActivity extends AppCompatActivity {
             }
         }, authManager.getUserName(), stocks, displayStocks, notes,
                 buildWinLossOpportunityPercents(displayStocks), marketIndices,
-                getGroups(), selectedGroup, countRiskStocks());
+                getGroups(), selectedGroup, countRiskStocks(),
+                watchlistManageMode, managedWatchlistStockCodes);
         return builder.build();
     }
 
@@ -791,11 +829,9 @@ public class MainActivity extends AppCompatActivity {
         fixedTop.addView(header, matchWrap());
         fixedTop.addView(spacer(10));
         fixedTop.addView(newsModeSwitchBar(), matchWrap());
-        if (sources.size() > 0) {
+        if (feedNews.size() > 0) {
             fixedTop.addView(spacer(8));
-            fixedTop.addView(compactSourceBarForFeed(sources, selectedSource, feedKey), matchWrap());
-            fixedTop.addView(spacer(6));
-            fixedTop.addView(text(selectedSource + " · " + getNewsBySource(feedNews, selectedSource).size() + " 条", 12, COLOR_SUB, false), matchWrap());
+            fixedTop.addView(text("共 " + feedNews.size() + " 条资讯", 12, COLOR_SUB, false), matchWrap());
         }
         rootPage.addView(fixedTop, matchWrap());
 
@@ -844,12 +880,111 @@ public class MainActivity extends AppCompatActivity {
         android.util.Log.d(TAG, "buildNewsFeedPage mode=" + selectedNewsMode
                 + ", feedCount=" + feedNews.size()
                 + ", sources=" + sources);
-        ArrayList<News> sourceNews = getNewsBySource(feedNews, selectedSource);
-        int displayCount = Math.min(sourceNews.size(), 12);
-        for (int i = 0; i < displayCount; i++) {
-            page.addView(feedNewsRow(sourceNews.get(i)), matchWrap());
-            page.addView(spacer(10));
+        ArrayList<News> sourceNews = deduplicateNewsList(feedNews, stocks);
+        page.addView(buildNewsSummaryCard(sourceNews), matchWrap());
+        page.addView(spacer(14));
+
+        NewsGroup gRisk = new NewsGroup("🚨 风险预警", 15);
+        NewsGroup gDirect = new NewsGroup("🎯 直接影响自选股", 15);
+        NewsGroup gIndustryTheme = new NewsGroup("🔥 行业与题材催化", 8);
+        NewsGroup gMacro = new NewsGroup("🌐 宏观市场环境", 8);
+        NewsGroup gWeak = new NewsGroup("💤 其他相关资讯", 4);
+
+        for (int i = 0; i < sourceNews.size(); i++) {
+            News item = sourceNews.get(i);
+            com.face.mymoney.realtime.RealtimeDecisionAnalyzer.NewsValClassification cl = 
+                com.face.mymoney.realtime.RealtimeDecisionAnalyzer.classifyNews(item, stocks);
+            
+            if ("硬风险".equals(cl.category) || "风险事件".equals(cl.category)) {
+                gRisk.list.add(item);
+            } else if (cl.relationType != null && cl.relationType.contains("直接相关")) {
+                gDirect.list.add(item);
+            } else if ((cl.relationType != null && cl.relationType.contains("行业相关")) || "题材催化".equals(cl.category)) {
+                gIndustryTheme.list.add(item);
+            } else if ("宏观影响".equals(cl.category)) {
+                gMacro.list.add(item);
+            } else {
+                gWeak.list.add(item);
+            }
         }
+
+        // Sort items inside each group
+        sortNewsByClassification(gRisk.list, stocks);
+        sortNewsByClassification(gDirect.list, stocks);
+        sortNewsByClassification(gIndustryTheme.list, stocks);
+        sortNewsByClassification(gMacro.list, stocks);
+        sortNewsByClassification(gWeak.list, stocks);
+
+        NewsGroup[] groups = { gRisk, gDirect, gIndustryTheme, gMacro };
+        for (int i = 0; i < groups.length; i++) {
+            NewsGroup group = groups[i];
+            if (group.list.size() > 0) {
+                page.addView(groupHeader(group.iconHeader, group.list.size()), matchWrap());
+                page.addView(spacer(6));
+                
+                int showCount = Math.min(group.list.size(), group.maxDisplayCount);
+                for (int j = 0; j < showCount; j++) {
+                    page.addView(feedNewsRow(group.list.get(j)), matchWrap());
+                    page.addView(spacer(10));
+                }
+                
+                if (group.list.size() > showCount) {
+                    page.addView(text("    还有 " + (group.list.size() - showCount) + " 条较旧或低优资讯未展示", 11, COLOR_SUB, false), matchWrap());
+                    page.addView(spacer(10));
+                }
+            }
+        }
+
+        if (gWeak.list.size() > 0) {
+            if (weakNewsExpanded) {
+                LinearLayout weakHeader = horizontal();
+                weakHeader.setGravity(Gravity.CENTER_VERTICAL);
+                weakHeader.setPadding(dp(2), dp(10), dp(2), dp(4));
+                weakHeader.addView(text("💤 其他相关资讯", 14, COLOR_TEXT, true), weightWrap(1));
+                
+                TextView collapseBtn = text("收起", 12, COLOR_ACCENT, true);
+                collapseBtn.setPadding(dp(10), dp(4), dp(10), dp(4));
+                collapseBtn.setBackground(rounded(COLOR_ACCENT_SOFT, dp(12)));
+                collapseBtn.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        weakNewsExpanded = false;
+                        showCurrentTab();
+                    }
+                });
+                weakHeader.addView(collapseBtn, wrapWrap());
+                page.addView(weakHeader, matchWrap());
+                page.addView(spacer(6));
+
+                int showCount = Math.min(gWeak.list.size(), 15);
+                for (int j = 0; j < showCount; j++) {
+                    page.addView(feedNewsRow(gWeak.list.get(j)), matchWrap());
+                    page.addView(spacer(10));
+                }
+                if (gWeak.list.size() > showCount) {
+                    page.addView(text("    还有 " + (gWeak.list.size() - showCount) + " 条资讯未展示", 11, COLOR_SUB, false), matchWrap());
+                    page.addView(spacer(10));
+                }
+            } else {
+                LinearLayout foldCard = card();
+                foldCard.setPadding(dp(14), dp(12), dp(14), dp(12));
+                LinearLayout foldContent = horizontal();
+                foldContent.setGravity(Gravity.CENTER_VERTICAL);
+                foldContent.addView(text("💤 更多弱相关资讯", 14, COLOR_TEXT, true), weightWrap(1));
+                foldContent.addView(tag(gWeak.list.size() + " 条 · 点击展开", COLOR_ACCENT_SOFT, COLOR_ACCENT), wrapWrap());
+                foldCard.addView(foldContent, matchWrap());
+                foldCard.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        weakNewsExpanded = true;
+                        showCurrentTab();
+                    }
+                });
+                page.addView(foldCard, matchWrap());
+                page.addView(spacer(10));
+            }
+        }
+
         rootPage.addView(scrollView, new LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         return rootPage;
     }
@@ -963,7 +1098,69 @@ public class MainActivity extends AppCompatActivity {
         title.setLineSpacing(dp(2), 1.0f);
         row.addView(title, matchWrap());
         row.addView(spacer(4));
-        row.addView(text(getString(R.string.news_meta_format, item.source, item.time, item.keyword), 12, COLOR_SUB, false), matchWrap());
+        String freshnessLabel = com.face.mymoney.realtime.RealtimeDecisionAnalyzer.getFreshnessLabel(item, System.currentTimeMillis());
+        String metaText = item.source + " · " + freshnessLabel + " · " + item.time;
+        if (item.keyword != null && item.keyword.trim().length() > 0) {
+            metaText += " · 关键词：" + item.keyword;
+        }
+        row.addView(text(metaText, 12, COLOR_SUB, false), matchWrap());
+        row.addView(spacer(6));
+
+        com.face.mymoney.realtime.RealtimeDecisionAnalyzer.NewsValClassification classification = 
+                com.face.mymoney.realtime.RealtimeDecisionAnalyzer.classifyNews(item, stocks);
+        LinearLayout eventRow = horizontal();
+        eventRow.setGravity(Gravity.CENTER_VERTICAL);
+        eventRow.addView(realtimeChip(classification.category, classification.level), wrapWrap());
+        eventRow.addView(spacer(8, 1));
+        
+        String explanation = classification.relationType;
+        if (classification.matchedKeyword.length() > 0) {
+            explanation = explanation + " · " + classification.matchedKeyword;
+        }
+        eventRow.addView(text(explanation, 12, COLOR_SUB, false), weightWrap(1));
+        row.addView(eventRow, matchWrap());
+
+        row.addView(spacer(6));
+        LinearLayout impactRow = horizontal();
+        impactRow.setGravity(Gravity.CENTER_VERTICAL);
+        impactRow.addView(text("影响：", 12, COLOR_TEXT, true), wrapWrap());
+        
+        if (classification.matchedStocks != null && classification.matchedStocks.size() > 0) {
+            for (int k = 0; k < classification.matchedStocks.size(); k++) {
+                final Stock s = classification.matchedStocks.get(k);
+                TextView stockTag = tag(s.name, Color.rgb(239, 246, 255), Color.rgb(29, 78, 216));
+                stockTag.setPadding(dp(6), dp(2), dp(6), dp(2));
+                stockTag.setTextSize(11);
+                stockTag.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        linkedNewsEvent = item;
+                        showStockDetail(s);
+                    }
+                });
+                impactRow.addView(stockTag, wrapWrap());
+                impactRow.addView(spacer(4, 1));
+            }
+        }
+        
+        String remainingText = "";
+        String rawImpact = classification.impactObject;
+        if (classification.matchedStocks != null && classification.matchedStocks.size() > 0) {
+            int slashIdx = rawImpact.indexOf('/');
+            if (slashIdx >= 0) {
+                remainingText = rawImpact.substring(slashIdx).trim();
+            }
+        } else {
+            remainingText = rawImpact;
+        }
+        
+        if (remainingText.length() > 0) {
+            impactRow.addView(text(remainingText, 12, COLOR_SUB, false), weightWrap(1));
+        } else {
+            impactRow.addView(new View(row.getContext()), weightWrap(1));
+        }
+        row.addView(impactRow, matchWrap());
+
         row.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -1681,9 +1878,28 @@ public class MainActivity extends AppCompatActivity {
      * 构建即时分析卡片。
      */
     private View realtimeDecisionCard(Stock stock) {
+        ArrayList<News> newsList = newsCache.get(stock.code);
+        if (newsList == null) {
+            newsList = new ArrayList<News>();
+        } else {
+            newsList = new ArrayList<News>(newsList);
+        }
+        if (linkedNewsEvent != null) {
+            boolean exists = false;
+            for (int k = 0; k < newsList.size(); k++) {
+                if (newsList.get(k).title.equals(linkedNewsEvent.title)) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                newsList.add(0, linkedNewsEvent);
+            }
+        }
+
         RealtimeDecisionAnalyzer.StockSignal signal = RealtimeDecisionAnalyzer.analyzeStock(
                 stock,
-                newsCache.get(stock.code),
+                newsList,
                 opinionCache.get(stock.code),
                 newsFetchedAtCache.get(stock.code),
                 opinionFetchedAtCache.get(stock.code),
@@ -1704,6 +1920,39 @@ public class MainActivity extends AppCompatActivity {
         header.addView(titleBox, weightWrap(1));
         header.addView(realtimeChip(signal.status, signal.level), wrapWrap());
         card.addView(header, matchWrap());
+
+        if (linkedNewsEvent != null) {
+            card.addView(spacer(8));
+            LinearLayout linkedBox = vertical();
+            linkedBox.setPadding(dp(12), dp(10), dp(12), dp(10));
+            linkedBox.setBackground(rounded(Color.rgb(254, 243, 199), dp(8)));
+            
+            LinearLayout linkedTitleRow = horizontal();
+            linkedTitleRow.setGravity(Gravity.CENTER_VERTICAL);
+            linkedTitleRow.addView(text("🔗 关联触发事件", 12, Color.rgb(180, 83, 9), true), weightWrap(1));
+            
+            ArrayList<Stock> singleStockList = new ArrayList<Stock>();
+            singleStockList.add(stock);
+            com.face.mymoney.realtime.RealtimeDecisionAnalyzer.NewsValClassification linkedCl = 
+                    com.face.mymoney.realtime.RealtimeDecisionAnalyzer.classifyNews(linkedNewsEvent, singleStockList);
+            
+            linkedTitleRow.addView(realtimeChip(linkedCl.category, linkedCl.level), wrapWrap());
+            linkedBox.addView(linkedTitleRow, matchWrap());
+            linkedBox.addView(spacer(4));
+            
+            TextView eventTitleText = text(linkedNewsEvent.title, 13, COLOR_TEXT, true);
+            eventTitleText.setLineSpacing(dp(2), 1.0f);
+            linkedBox.addView(eventTitleText, matchWrap());
+            
+            String explanation = linkedCl.relationType;
+            if (linkedCl.matchedKeyword.length() > 0) {
+                explanation = explanation + " · " + linkedCl.matchedKeyword;
+            }
+            linkedBox.addView(spacer(2));
+            linkedBox.addView(text(explanation + " (" + linkedNewsEvent.source + ")", 11, COLOR_SUB, false), matchWrap());
+            
+            card.addView(linkedBox, matchWrap());
+        }
 
         card.addView(spacer(10));
         TextView summary = text(signal.summary, 14, COLOR_TEXT, false);
@@ -1934,6 +2183,10 @@ public class MainActivity extends AppCompatActivity {
             list.addView(sourceSwitchBar(stock, sources, selectedSource, true), matchWrap());
             list.addView(spacer(8));
             ArrayList<News> sourceNews = getNewsBySource(news, selectedSource);
+            ArrayList<Stock> singleStockList = new ArrayList<Stock>();
+            singleStockList.add(stock);
+            sourceNews = deduplicateNewsList(sourceNews, singleStockList);
+            sortNewsByClassification(sourceNews, singleStockList);
             list.addView(sourceHeader(selectedSource, sourceNews.size(), "条资讯"), matchWrap());
             list.addView(spacer(8));
             int displayCount = Math.min(sourceNews.size(), 8);
@@ -1955,17 +2208,69 @@ public class MainActivity extends AppCompatActivity {
     private View newsRow(final Stock stock, final News item) {
         LinearLayout row = card();
         row.setPadding(dp(12), dp(9), dp(12), dp(9));
-        RealtimeDecisionAnalyzer.EventSignal eventSignal = RealtimeDecisionAnalyzer.analyzeNews(stock, item);
+        
+        com.face.mymoney.realtime.RealtimeDecisionAnalyzer.NewsValClassification classification = 
+                com.face.mymoney.realtime.RealtimeDecisionAnalyzer.classifyNews(item, stocks);
+        
         row.addView(singleLineText(item.title, 14, COLOR_TEXT, true), matchWrap());
         row.addView(spacer(4));
-        row.addView(singleLineText(item.source + " · " + item.time, 11, COLOR_SUB, false), matchWrap());
+        String freshnessLabel = com.face.mymoney.realtime.RealtimeDecisionAnalyzer.getFreshnessLabel(item, System.currentTimeMillis());
+        row.addView(singleLineText(item.source + " · " + freshnessLabel + " · " + item.time, 11, COLOR_SUB, false), matchWrap());
         row.addView(spacer(6));
+        
         LinearLayout eventRow = horizontal();
         eventRow.setGravity(Gravity.CENTER_VERTICAL);
-        eventRow.addView(realtimeChip(eventSignal.status, eventSignal.level), wrapWrap());
+        eventRow.addView(realtimeChip(classification.category, classification.level), wrapWrap());
         eventRow.addView(spacer(8, 1));
-        eventRow.addView(text(eventSignal.summary, 12, COLOR_SUB, false), weightWrap(1));
+        
+        String explanation = classification.relationType;
+        if (classification.matchedKeyword.length() > 0) {
+            explanation = explanation + " · " + classification.matchedKeyword;
+        }
+        eventRow.addView(text(explanation, 12, COLOR_SUB, false), weightWrap(1));
         row.addView(eventRow, matchWrap());
+
+        row.addView(spacer(6));
+        LinearLayout impactRow = horizontal();
+        impactRow.setGravity(Gravity.CENTER_VERTICAL);
+        impactRow.addView(text("影响：", 12, COLOR_TEXT, true), wrapWrap());
+        
+        if (classification.matchedStocks != null && classification.matchedStocks.size() > 0) {
+            for (int k = 0; k < classification.matchedStocks.size(); k++) {
+                final Stock s = classification.matchedStocks.get(k);
+                TextView stockTag = tag(s.name, Color.rgb(239, 246, 255), Color.rgb(29, 78, 216));
+                stockTag.setPadding(dp(6), dp(2), dp(6), dp(2));
+                stockTag.setTextSize(11);
+                stockTag.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        linkedNewsEvent = item;
+                        showStockDetail(s);
+                    }
+                });
+                impactRow.addView(stockTag, wrapWrap());
+                impactRow.addView(spacer(4, 1));
+            }
+        }
+        
+        String remainingText = "";
+        String rawImpact = classification.impactObject;
+        if (classification.matchedStocks != null && classification.matchedStocks.size() > 0) {
+            int slashIdx = rawImpact.indexOf('/');
+            if (slashIdx >= 0) {
+                remainingText = rawImpact.substring(slashIdx).trim();
+            }
+        } else {
+            remainingText = rawImpact;
+        }
+        
+        if (remainingText.length() > 0) {
+            impactRow.addView(text(remainingText, 12, COLOR_SUB, false), weightWrap(1));
+        } else {
+            impactRow.addView(new View(row.getContext()), weightWrap(1));
+        }
+        row.addView(impactRow, matchWrap());
+
         row.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -2326,6 +2631,343 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         return result;
+    }
+
+    /**
+     * 根据价值分类对新闻列表进行排序（硬风险、风险事件等排在前面，弱相关靠后）。
+     */
+    private void sortNewsByClassification(ArrayList<News> newsList, final ArrayList<Stock> stocksToMatch) {
+        if (newsList == null || newsList.size() <= 1) {
+            return;
+        }
+        java.util.Collections.sort(newsList, new java.util.Comparator<News>() {
+            @Override
+            public int compare(News o1, News o2) {
+                int p1 = com.face.mymoney.realtime.RealtimeDecisionAnalyzer.classifyNews(o1, stocksToMatch).priority;
+                int p2 = com.face.mymoney.realtime.RealtimeDecisionAnalyzer.classifyNews(o2, stocksToMatch).priority;
+                return Integer.compare(p2, p1); // 降序排序
+            }
+        });
+    }
+
+    /**
+     * 新闻分组辅助类。
+     */
+    private static class NewsGroup {
+        String iconHeader;
+        ArrayList<News> list = new ArrayList<News>();
+        int maxDisplayCount;
+
+        NewsGroup(String iconHeader, int maxDisplayCount) {
+            this.iconHeader = iconHeader;
+            this.maxDisplayCount = maxDisplayCount;
+        }
+    }
+
+    /**
+     * 渲染新闻分组表头。
+     */
+    private View groupHeader(String title, int count) {
+        LinearLayout row = horizontal();
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(2), dp(10), dp(2), dp(4));
+        row.addView(text(title, 14, COLOR_TEXT, true), weightWrap(1));
+        row.addView(tag(count + " 条", COLOR_ACCENT_SOFT, COLOR_ACCENT), wrapWrap());
+        return row;
+    }
+
+    /**
+     * 构建今日新闻即时摘要卡片。
+     */
+    private View buildNewsSummaryCard(ArrayList<News> sourceNews) {
+        LinearLayout card = card();
+        card.setPadding(dp(16), dp(14), dp(16), dp(14));
+        card.setBackground(roundedStroke(Color.WHITE, dp(14), Color.rgb(224, 231, 255)));
+
+        LinearLayout header = horizontal();
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(text("📊 今日订阅资讯即时摘要", 15, COLOR_TEXT, true), weightWrap(1));
+        card.addView(header, matchWrap());
+        card.addView(spacer(10));
+
+        int hardRiskCount = 0;
+        int positiveCount = 0;
+        int themeCount = 0;
+        ArrayList<String> affectedStocks = new ArrayList<String>();
+        ArrayList<String> mainThemes = new ArrayList<String>();
+
+        for (int i = 0; i < sourceNews.size(); i++) {
+            News item = sourceNews.get(i);
+            com.face.mymoney.realtime.RealtimeDecisionAnalyzer.NewsValClassification cl = 
+                com.face.mymoney.realtime.RealtimeDecisionAnalyzer.classifyNews(item, stocks);
+
+            if ("硬风险".equals(cl.category)) {
+                hardRiskCount++;
+            } else if ("正面增量".equals(cl.category)) {
+                positiveCount++;
+            } else if ("题材催化".equals(cl.category)) {
+                themeCount++;
+            }
+
+            String title = item.title == null ? "" : item.title;
+            String content = item.content == null ? "" : item.content;
+            String keyword = item.keyword == null ? "" : item.keyword;
+            String text = (title + " " + keyword + " " + content).toUpperCase(java.util.Locale.US);
+
+            if (stocks != null) {
+                for (int j = 0; j < stocks.size(); j++) {
+                    Stock s = stocks.get(j);
+                    if ((s.name != null && text.contains(s.name.toUpperCase(java.util.Locale.US))) || 
+                        (s.code != null && text.contains(s.code.toUpperCase(java.util.Locale.US)))) {
+                        if (!affectedStocks.contains(s.name)) {
+                            affectedStocks.add(s.name);
+                        }
+                    }
+                }
+            }
+
+            String[] themeKeywords = {
+                "AI", "算力", "半导体", "机器人", "低空经济", "新能源", "光模块", "CPO", "数据中心", "存储", "芯片", "军工", "消费电子", "人工智能", "低空", "商业航天", "固态电池", "大模型", "低空飞行", "新质生产力", "人形机器人"
+            };
+            for (int k = 0; k < themeKeywords.length; k++) {
+                if (text.contains(themeKeywords[k].toUpperCase(java.util.Locale.US))) {
+                    if (!mainThemes.contains(themeKeywords[k])) {
+                        mainThemes.add(themeKeywords[k]);
+                    }
+                }
+            }
+        }
+
+        LinearLayout statsRow = horizontal();
+        statsRow.setGravity(Gravity.CENTER_VERTICAL);
+        
+        statsRow.addView(buildStatItem("硬风险", hardRiskCount + " 条", realtimeTextColor(com.face.mymoney.realtime.RealtimeDecisionAnalyzer.LEVEL_RISK)), weightWrap(1));
+        statsRow.addView(spacer(1, 12), wrapHeight(dp(20)));
+        statsRow.addView(buildStatItem("正面增量", positiveCount + " 条", realtimeTextColor(com.face.mymoney.realtime.RealtimeDecisionAnalyzer.LEVEL_GOOD)), weightWrap(1));
+        statsRow.addView(spacer(1, 12), wrapHeight(dp(20)));
+        statsRow.addView(buildStatItem("题材催化", themeCount + " 条", COLOR_ACCENT), weightWrap(1));
+        card.addView(statsRow, matchWrap());
+        card.addView(spacer(12));
+
+        String stocksText = affectedStocks.size() > 0 ? joinStrings(affectedStocks, "、") : "无";
+        LinearLayout stocksRow = horizontal();
+        stocksRow.addView(text("受影响自选股：", 13, COLOR_TEXT, true), wrapWrap());
+        stocksRow.addView(text(stocksText, 13, COLOR_SUB, false), weightWrap(1));
+        card.addView(stocksRow, matchWrap());
+        card.addView(spacer(6));
+
+        String themesText = mainThemes.size() > 0 ? joinStrings(mainThemes, " / ") : "无";
+        LinearLayout themesRow = horizontal();
+        themesRow.addView(text("主要题材：", 13, COLOR_TEXT, true), wrapWrap());
+        themesRow.addView(text(themesText, 13, COLOR_SUB, false), weightWrap(1));
+        card.addView(themesRow, matchWrap());
+        card.addView(spacer(10));
+
+        String adviceText = "";
+        int adviceBgColor = 0;
+        int adviceTextColor = 0;
+        if (hardRiskCount > 0) {
+            adviceText = "重点核验风险";
+            adviceBgColor = realtimeSoftColor(com.face.mymoney.realtime.RealtimeDecisionAnalyzer.LEVEL_RISK);
+            adviceTextColor = realtimeTextColor(com.face.mymoney.realtime.RealtimeDecisionAnalyzer.LEVEL_RISK);
+        } else if (positiveCount > 0) {
+            adviceText = "关注正面增量";
+            adviceBgColor = realtimeSoftColor(com.face.mymoney.realtime.RealtimeDecisionAnalyzer.LEVEL_GOOD);
+            adviceTextColor = realtimeTextColor(com.face.mymoney.realtime.RealtimeDecisionAnalyzer.LEVEL_GOOD);
+        } else {
+            adviceText = "暂无强事件";
+            adviceBgColor = Color.rgb(241, 245, 249);
+            adviceTextColor = Color.rgb(71, 85, 105);
+        }
+
+        LinearLayout adviceBanner = horizontal();
+        adviceBanner.setGravity(Gravity.CENTER_VERTICAL);
+        adviceBanner.setPadding(dp(12), dp(8), dp(12), dp(8));
+        adviceBanner.setBackground(rounded(adviceBgColor, dp(8)));
+        
+        adviceBanner.addView(text("当前建议：", 13, adviceTextColor, true), wrapWrap());
+        adviceBanner.addView(text(adviceText, 13, adviceTextColor, true), weightWrap(1));
+        card.addView(adviceBanner, matchWrap());
+
+        return card;
+    }
+
+    private View buildStatItem(String label, String value, int valueColor) {
+        LinearLayout col = vertical();
+        col.setGravity(Gravity.CENTER);
+        col.addView(text(label, 11, COLOR_SUB, false), wrapWrap());
+        col.addView(spacer(2));
+        col.addView(text(value, 15, valueColor, true), wrapWrap());
+        return col;
+    }
+
+    private String joinStrings(ArrayList<String> list, String delimiter) {
+        if (list == null || list.size() == 0) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < list.size(); i++) {
+            if (i > 0) {
+                sb.append(delimiter);
+            }
+            sb.append(list.get(i));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 新闻去重逻辑，应用：标题完全相同、标题相似度高、同一股票+同一关键词+同一天合并等规则。
+     */
+    private ArrayList<News> deduplicateNewsList(ArrayList<News> rawNews, final ArrayList<Stock> stocksToMatch) {
+        if (rawNews == null || rawNews.size() <= 1) {
+            return rawNews == null ? new ArrayList<News>() : new ArrayList<News>(rawNews);
+        }
+
+        ArrayList<News> deduplicated = new ArrayList<News>();
+        
+        for (int i = 0; i < rawNews.size(); i++) {
+            News item = rawNews.get(i);
+            boolean isDuplicate = false;
+            int dupIndex = -1;
+
+            com.face.mymoney.realtime.RealtimeDecisionAnalyzer.NewsValClassification clItem = 
+                com.face.mymoney.realtime.RealtimeDecisionAnalyzer.classifyNews(item, stocksToMatch);
+            String itemText = ((item.title == null ? "" : item.title) + " " + 
+                              (item.keyword == null ? "" : item.keyword) + " " + 
+                              (item.content == null ? "" : item.content)).toUpperCase(java.util.Locale.US);
+
+            for (int j = 0; j < deduplicated.size(); j++) {
+                News existing = deduplicated.get(j);
+                
+                // 1. 标题完全相同或相似度高
+                if (isSimilarTitle(item.title, existing.title)) {
+                    isDuplicate = true;
+                    dupIndex = j;
+                    break;
+                }
+
+                // 2. 同一股票 + 同一关键词 + 同一天
+                com.face.mymoney.realtime.RealtimeDecisionAnalyzer.NewsValClassification clExisting = 
+                    com.face.mymoney.realtime.RealtimeDecisionAnalyzer.classifyNews(existing, stocksToMatch);
+                String existingText = ((existing.title == null ? "" : existing.title) + " " + 
+                                       (existing.keyword == null ? "" : existing.keyword) + " " + 
+                                       (existing.content == null ? "" : existing.content)).toUpperCase(java.util.Locale.US);
+
+                boolean sameStock = false;
+                if (stocksToMatch != null) {
+                    for (int k = 0; k < stocksToMatch.size(); k++) {
+                        Stock s = stocksToMatch.get(k);
+                        boolean itemMatches = (s.name != null && itemText.contains(s.name.toUpperCase(java.util.Locale.US))) || 
+                                              (s.code != null && itemText.contains(s.code.toUpperCase(java.util.Locale.US)));
+                        boolean existingMatches = (s.name != null && existingText.contains(s.name.toUpperCase(java.util.Locale.US))) || 
+                                                  (s.code != null && existingText.contains(s.code.toUpperCase(java.util.Locale.US)));
+                        if (itemMatches && existingMatches) {
+                            sameStock = true;
+                            break;
+                        }
+                    }
+                }
+
+                boolean sameKeyword = clItem.matchedKeyword.length() > 0 && clItem.matchedKeyword.equals(clExisting.matchedKeyword);
+                
+                String date1 = extractDate(item.time);
+                String date2 = extractDate(existing.time);
+                boolean sameDay = date1.length() > 0 && date1.equals(date2);
+
+                if (sameStock && sameKeyword && sameDay) {
+                    isDuplicate = true;
+                    dupIndex = j;
+                    break;
+                }
+            }
+
+            if (isDuplicate) {
+                // 优先保留内容更完整、来源更可靠的新闻
+                News existing = deduplicated.get(dupIndex);
+                if (isBetterNews(item, existing)) {
+                    deduplicated.set(dupIndex, item);
+                }
+            } else {
+                deduplicated.add(item);
+            }
+        }
+
+        return deduplicated;
+    }
+
+    private boolean isSimilarTitle(String t1, String t2) {
+        if (t1 == null || t2 == null) {
+            return false;
+        }
+        t1 = t1.trim();
+        t2 = t2.trim();
+        if (t1.equals(t2)) {
+            return true;
+        }
+        int lcs = getLCSLength(t1, t2);
+        double ratio = (double) lcs / Math.max(t1.length(), t2.length());
+        return ratio >= 0.75; // 75% 相似度阈值
+    }
+
+    private int getLCSLength(String s1, String s2) {
+        int m = s1.length();
+        int n = s2.length();
+        int[][] dp = new int[m + 1][n + 1];
+        for (int i = 1; i <= m; i++) {
+            for (int j = 1; j <= n; j++) {
+                if (s1.charAt(i - 1) == s2.charAt(j - 1)) {
+                    dp[i][j] = dp[i - 1][j - 1] + 1;
+                } else {
+                    dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+                }
+            }
+        }
+        return dp[m][n];
+    }
+
+    private String extractDate(String timeStr) {
+        if (timeStr == null || timeStr.length() < 5) {
+            return "";
+        }
+        int spaceIdx = timeStr.indexOf(' ');
+        if (spaceIdx > 0) {
+            return timeStr.substring(0, spaceIdx);
+        }
+        if (timeStr.length() >= 10) {
+            return timeStr.substring(0, 10);
+        }
+        return timeStr;
+    }
+
+    private boolean isBetterNews(News n1, News n2) {
+        int score1 = getSourceReliabilityScore(n1.source);
+        int score2 = getSourceReliabilityScore(n2.source);
+        if (score1 != score2) {
+            return score1 > score2;
+        }
+        int len1 = n1.content == null ? 0 : n1.content.trim().length();
+        int len2 = n2.content == null ? 0 : n2.content.trim().length();
+        if (len1 != len2) {
+            return len1 > len2;
+        }
+        int tlen1 = n1.title == null ? 0 : n1.title.length();
+        int tlen2 = n2.title == null ? 0 : n2.title.length();
+        return tlen1 >= tlen2;
+    }
+
+    private int getSourceReliabilityScore(String source) {
+        if (source == null) return 0;
+        String s = source.toUpperCase(java.util.Locale.US);
+        if (s.contains("财联社") || s.contains("CLS")) {
+            return 4;
+        }
+        if (s.contains("东方财富") || s.contains("EASTMONEY")) {
+            return 3;
+        }
+        if (s.contains("新浪") || s.contains("SINA")) {
+            return 2;
+        }
+        return 1;
     }
 
     /**
@@ -2709,7 +3351,25 @@ public class MainActivity extends AppCompatActivity {
      * 弹出/显示新闻资讯对话框。
      */
     private void showNewsDialog(Stock stock, News news) {
-        String message = getString(R.string.news_dialog_format, news.source, news.time, news.content, stock.name, stock.code, news.keyword);
+        ArrayList<Stock> singleStockList = new ArrayList<Stock>();
+        singleStockList.add(stock);
+        com.face.mymoney.realtime.RealtimeDecisionAnalyzer.NewsValClassification classification = 
+                com.face.mymoney.realtime.RealtimeDecisionAnalyzer.classifyNews(news, singleStockList);
+        String explanation = classification.relationType;
+        if (classification.matchedKeyword.length() > 0) {
+            explanation = explanation + " · " + classification.matchedKeyword;
+        }
+
+        String content = news.content == null ? "" : news.content.trim();
+        if (content.length() == 0 || content.equals(news.title)) {
+            content = "摘要：" + news.title;
+        }
+
+        String message = news.source + " · " + news.time + "\n"
+                + "价值分类：" + classification.category + " (" + explanation + ")\n\n"
+                + content + "\n\n"
+                + "关键词：" + news.keyword;
+
         new AlertDialog.Builder(this)
                 .setTitle(news.title)
                 .setMessage(message)
@@ -2721,20 +3381,30 @@ public class MainActivity extends AppCompatActivity {
      * 弹出/显示feed新闻资讯对话框。
      */
     private void showFeedNewsDialog(News news) {
+        com.face.mymoney.realtime.RealtimeDecisionAnalyzer.NewsValClassification classification = 
+                com.face.mymoney.realtime.RealtimeDecisionAnalyzer.classifyNews(news, stocks);
+        String explanation = classification.relationType;
+        if (classification.matchedKeyword.length() > 0) {
+            explanation = explanation + " · " + classification.matchedKeyword;
+        }
+
         String content = news.content == null ? "" : news.content.trim();
         android.util.Log.d(TAG, "showFeedNewsDialog title=" + news.title
                 + ", source=" + news.source
                 + ", contentLength=" + content.length()
                 + ", contentPreview=" + (content.length() > 120 ? content.substring(0, 120) : content));
         if (content.length() == 0 || content.equals(news.title)) {
-            content = "摘要：" + news.title
-                    + "\n\n来源：" + news.source
-                    + "\n时间：" + news.time
-                    + "\n关键词：" + news.keyword;
+            content = "摘要：" + news.title;
         }
+
+        String message = news.source + " · " + news.time + "\n"
+                + "价值分类：" + classification.category + " (" + explanation + ")\n\n"
+                + content + "\n\n"
+                + "关键词：" + news.keyword;
+
         new AlertDialog.Builder(this)
                 .setTitle(news.title)
-                .setMessage(news.source + " · " + news.time + "\n\n" + content + "\n\n关键词：" + news.keyword)
+                .setMessage(message)
                 .setPositiveButton(getString(R.string.ok), null)
                 .show();
     }
@@ -2851,6 +3521,175 @@ public class MainActivity extends AppCompatActivity {
     /**
      * 刷新hot候选股票列表。
      */
+    /**
+     * Switches watchlist batch management mode.
+     */
+    private void setWatchlistManageMode(boolean enabled) {
+        if (enabled && filterStocks().size() == 0) {
+            Toast.makeText(this, "当前列表没有可管理的自选股", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        watchlistManageMode = enabled;
+        if (!enabled) {
+            managedWatchlistStockCodes.clear();
+        }
+        rememberWatchlistScroll();
+        showCurrentTab();
+    }
+
+    /**
+     * Toggles one stock in watchlist batch selection.
+     */
+    private void toggleManagedWatchlistStock(Stock stock) {
+        if (stock == null || stock.code == null || stock.code.length() == 0) {
+            return;
+        }
+        if (managedWatchlistStockCodes.contains(stock.code)) {
+            managedWatchlistStockCodes.remove(stock.code);
+        } else {
+            managedWatchlistStockCodes.add(stock.code);
+        }
+        rememberWatchlistScroll();
+        showCurrentTab();
+    }
+
+    /**
+     * Selects all visible stocks in the current watchlist group.
+     */
+    private void selectAllManagedWatchlistStocks() {
+        ArrayList<Stock> displayStocks = filterStocks();
+        for (int i = 0; i < displayStocks.size(); i++) {
+            Stock stock = displayStocks.get(i);
+            if (stock != null && stock.code != null && stock.code.length() > 0) {
+                managedWatchlistStockCodes.add(stock.code);
+            }
+        }
+        rememberWatchlistScroll();
+        showCurrentTab();
+    }
+
+    /**
+     * Clears current watchlist batch selection.
+     */
+    private void clearManagedWatchlistStocks() {
+        managedWatchlistStockCodes.clear();
+        rememberWatchlistScroll();
+        showCurrentTab();
+    }
+
+    /**
+     * Confirms batch deletion for selected watchlist stocks.
+     */
+    private void confirmDeleteManagedWatchlistStocks() {
+        final int selectedCount = countManagedWatchlistStocks();
+        if (selectedCount == 0) {
+            Toast.makeText(this, "请先选择要删除的自选股", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("删除自选股")
+                .setMessage("确认删除选中的 " + selectedCount + " 只自选股？决策记录会保留，便于后续复盘。")
+                .setNegativeButton(getString(R.string.cancel), null)
+                .setPositiveButton(getString(R.string.delete), new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface dialog, int which) {
+                        for (int i = stocks.size() - 1; i >= 0; i--) {
+                            Stock stock = stocks.get(i);
+                            if (stock != null && managedWatchlistStockCodes.contains(stock.code)) {
+                                stocks.remove(i);
+                            }
+                        }
+                        saveStocks();
+                        managedWatchlistStockCodes.clear();
+                        watchlistManageMode = false;
+                        currentStock = null;
+                        showCurrentTab();
+                        Toast.makeText(MainActivity.this, "已删除 " + selectedCount + " 只自选股", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .show();
+    }
+
+    /**
+     * Shows the batch group move dialog for selected watchlist stocks.
+     */
+    private void showMoveManagedWatchlistStocksDialog() {
+        final int selectedCount = countManagedWatchlistStocks();
+        if (selectedCount == 0) {
+            Toast.makeText(this, "请先选择要移动的自选股", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        LinearLayout form = vertical();
+        form.setPadding(dp(20), dp(10), dp(20), 0);
+        final Spinner groupSpinner = new Spinner(this);
+        final ArrayList<String> stockGroups = selectableGroups();
+        ArrayAdapter<String> groupAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, stockGroups);
+        groupSpinner.setAdapter(groupAdapter);
+        int selectedIndex = stockGroups.indexOf(selectedGroup);
+        if (selectedIndex >= 0) {
+            groupSpinner.setSelection(selectedIndex);
+        }
+        final EditText newGroup = input(getString(R.string.stock_new_group_hint));
+        newGroup.setSingleLine(true);
+
+        form.addView(text("将选中的 " + selectedCount + " 只自选股移动到：", 13, COLOR_SUB, false), matchWrap());
+        form.addView(spacer(10));
+        form.addView(text(getString(R.string.stock_group_select_hint), 12, COLOR_SUB, false), matchWrap());
+        form.addView(groupSpinner, matchHeight(dp(48)));
+        form.addView(spacer(10));
+        form.addView(newGroup, matchHeight(dp(52)));
+
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("移动分组")
+                .setView(form)
+                .setNegativeButton(getString(R.string.cancel), null)
+                .setPositiveButton("移动", null)
+                .create();
+        dialog.setOnShowListener(new android.content.DialogInterface.OnShowListener() {
+            @Override
+            public void onShow(android.content.DialogInterface d) {
+                Button button = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                button.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        String groupText = resolveStockGroup(groupSpinner, newGroup);
+                        stockRepository.saveGroupIfNeeded(groupText);
+                        int movedCount = 0;
+                        for (int i = 0; i < stocks.size(); i++) {
+                            Stock stock = stocks.get(i);
+                            if (stock != null && managedWatchlistStockCodes.contains(stock.code)) {
+                                stock.groupName = groupText;
+                                movedCount++;
+                            }
+                        }
+                        saveStocks();
+                        selectedGroup = groupText;
+                        managedWatchlistStockCodes.clear();
+                        watchlistManageMode = false;
+                        dialog.dismiss();
+                        showCurrentTab();
+                        Toast.makeText(MainActivity.this, "已移动 " + movedCount + " 只自选股", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        });
+        dialog.show();
+    }
+
+    /**
+     * Counts selected stocks that still exist in the watchlist.
+     */
+    private int countManagedWatchlistStocks() {
+        int count = 0;
+        for (int i = 0; i < stocks.size(); i++) {
+            Stock stock = stocks.get(i);
+            if (stock != null && stock.code != null && managedWatchlistStockCodes.contains(stock.code)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private void refreshHotCandidates(final boolean manual) {
         if (manual) {
             if (TAB_HOT.equals(currentTab) && currentStock == null) {

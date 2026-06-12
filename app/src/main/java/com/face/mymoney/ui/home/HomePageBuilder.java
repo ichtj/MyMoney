@@ -25,6 +25,7 @@ import com.face.mymoney.ui.StockDisplayText;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 
 public class HomePageBuilder {
     private static final String BOARD_THEME_TAG = "MyMoneyBoardTheme";
@@ -70,6 +71,18 @@ public class HomePageBuilder {
          */
         void onMoveStockBottom(Stock stock);
 
+        void onManageModeChanged(boolean enabled);
+
+        void onManageStockToggled(Stock stock);
+
+        void onManageSelectAll();
+
+        void onManageClearSelection();
+
+        void onManageDeleteSelected();
+
+        void onManageMoveSelected();
+
         /**
          * 当调试requested时的回调处理。
          */
@@ -99,6 +112,8 @@ public class HomePageBuilder {
     private final ArrayList<String> groups;
     private final String selectedGroup;
     private final int riskStockCount;
+    private final boolean manageMode;
+    private final HashSet<String> managedStockCodes;
     private final int touchSlop;
     private LinearLayout openActionRow;
 
@@ -107,7 +122,8 @@ public class HomePageBuilder {
                            ArrayList<DecisionNote> notes, HashMap<String, Integer> aiOpportunityPercents,
                            ArrayList<MarketIndexQuote> marketIndices,
                            ArrayList<String> groups,
-                           String selectedGroup, int riskStockCount) {
+                           String selectedGroup, int riskStockCount,
+                           boolean manageMode, HashSet<String> managedStockCodes) {
         this.context = context;
         this.ui = ui;
         this.listener = listener;
@@ -120,6 +136,8 @@ public class HomePageBuilder {
         this.groups = groups;
         this.selectedGroup = selectedGroup;
         this.riskStockCount = riskStockCount;
+        this.manageMode = manageMode;
+        this.managedStockCodes = managedStockCodes == null ? new HashSet<String>() : managedStockCodes;
         touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
     }
 
@@ -162,16 +180,42 @@ public class HomePageBuilder {
 
         LinearLayout row = ui.horizontal();
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.addView(ui.text(context.getString(R.string.watchlist_title), 18, COLOR_TEXT, true), ui.weightWrap(1));
-        Button add = ui.primaryButton(context.getString(R.string.add_button));
-        add.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                listener.onAddStock();
-            }
-        });
-        row.addView(add, ui.wrapHeight(ui.dp(36)));
+        if (manageMode) {
+            row.addView(ui.text("已选 " + countManagedDisplayStocks() + " 只", 18, COLOR_TEXT, true), ui.weightWrap(1));
+            Button done = ui.ghostButton("完成");
+            done.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    listener.onManageModeChanged(false);
+                }
+            });
+            row.addView(done, ui.wrapHeight(ui.dp(36)));
+        } else {
+            row.addView(ui.text(context.getString(R.string.watchlist_title), 18, COLOR_TEXT, true), ui.weightWrap(1));
+            Button manage = ui.ghostButton("管理");
+            manage.setEnabled(displayStocks.size() > 0);
+            manage.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    listener.onManageModeChanged(true);
+                }
+            });
+            row.addView(manage, ui.wrapHeight(ui.dp(36)));
+            row.addView(ui.spacer(ui.dp(8), 1));
+            Button add = ui.primaryButton(context.getString(R.string.add_button));
+            add.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    listener.onAddStock();
+                }
+            });
+            row.addView(add, ui.wrapHeight(ui.dp(36)));
+        }
         page.addView(row, ui.matchWrap());
+        if (manageMode) {
+            page.addView(ui.spacer(ui.dp(7)));
+            page.addView(buildManageActionBar(), ui.matchWrap());
+        }
         page.addView(ui.spacer(ui.dp(7)));
 
         if (displayStocks.size() == 0) {
@@ -187,6 +231,61 @@ public class HomePageBuilder {
             }
         }
         return scrollView;
+    }
+
+    private View buildManageActionBar() {
+        LinearLayout bar = ui.horizontal();
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+
+        final boolean allSelected = displayStocks.size() > 0
+                && countManagedDisplayStocks() == displayStocks.size();
+        Button select = ui.ghostButton(allSelected ? "清空" : "全选");
+        select.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (allSelected) {
+                    listener.onManageClearSelection();
+                } else {
+                    listener.onManageSelectAll();
+                }
+            }
+        });
+        bar.addView(select, new LinearLayout.LayoutParams(0, ui.dp(36), 1));
+        bar.addView(ui.spacer(ui.dp(8), 1));
+
+        Button move = ui.ghostButton("移动分组");
+        move.setEnabled(countManagedDisplayStocks() > 0);
+        move.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                listener.onManageMoveSelected();
+            }
+        });
+        bar.addView(move, new LinearLayout.LayoutParams(0, ui.dp(36), 1));
+        bar.addView(ui.spacer(ui.dp(8), 1));
+
+        Button delete = ui.ghostButton(context.getString(R.string.delete));
+        delete.setTextColor(COLOR_RISE);
+        delete.setEnabled(countManagedDisplayStocks() > 0);
+        delete.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                listener.onManageDeleteSelected();
+            }
+        });
+        bar.addView(delete, new LinearLayout.LayoutParams(0, ui.dp(36), 1));
+        return bar;
+    }
+
+    private int countManagedDisplayStocks() {
+        int count = 0;
+        for (int i = 0; i < displayStocks.size(); i++) {
+            Stock stock = displayStocks.get(i);
+            if (stock != null && stock.code != null && managedStockCodes.contains(stock.code)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private View buildSummaryCard() {
@@ -315,7 +414,15 @@ public class HomePageBuilder {
 
         final LinearLayout card = ui.card();
         card.setClickable(true);
-        card.setOnTouchListener(new View.OnTouchListener() {
+        if (manageMode) {
+            card.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    listener.onManageStockToggled(stock);
+                }
+            });
+        } else {
+            card.setOnTouchListener(new View.OnTouchListener() {
             private float downX;
             private float downY;
             private boolean swiping;
@@ -392,6 +499,7 @@ public class HomePageBuilder {
                 return true;
             }
         });
+        }
 
         card.setPadding(ui.dp(12), ui.dp(9), ui.dp(12), ui.dp(9));
 
@@ -438,9 +546,30 @@ public class HomePageBuilder {
         row.addView(quoteBox, new LinearLayout.LayoutParams(ui.dp(88), LinearLayout.LayoutParams.WRAP_CONTENT));
 
         card.addView(row, ui.matchWrap());
+        if (manageMode) {
+            wrapper.addView(manageCheckView(stock), new LinearLayout.LayoutParams(ui.dp(34), ui.dp(34)));
+            wrapper.addView(ui.spacer(ui.dp(8), 1));
+        }
         wrapper.addView(card, ui.weightWrap(1));
-        wrapper.addView(actionPanel(stock), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT));
+        if (!manageMode) {
+            wrapper.addView(actionPanel(stock), new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT));
+        }
         return wrapper;
+    }
+
+    private TextView manageCheckView(final Stock stock) {
+        final boolean selected = stock != null && stock.code != null && managedStockCodes.contains(stock.code);
+        TextView check = singleLineText(selected ? "✓" : "", 16, selected ? Color.WHITE : COLOR_SUB, true);
+        check.setGravity(Gravity.CENTER);
+        check.setBackground(selected ? circleFill(COLOR_ACCENT) : circleStroke(Color.rgb(203, 213, 225)));
+        check.setClickable(true);
+        check.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                listener.onManageStockToggled(stock);
+            }
+        });
+        return check;
     }
 
     private TextView intradayChip(String value, int level) {
@@ -515,6 +644,13 @@ public class HomePageBuilder {
         drawable.setShape(GradientDrawable.OVAL);
         drawable.setColor(Color.WHITE);
         drawable.setStroke(ui.dp(2), color);
+        return drawable;
+    }
+
+    private GradientDrawable circleFill(int color) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setShape(GradientDrawable.OVAL);
+        drawable.setColor(color);
         return drawable;
     }
 
