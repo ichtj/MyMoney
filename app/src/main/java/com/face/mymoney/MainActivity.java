@@ -115,6 +115,7 @@ public class MainActivity extends AppCompatActivity {
     private HashMap<String, ArrayList<KLineItem>> kLineCache = new HashMap<String, ArrayList<KLineItem>>();
     private HashMap<String, Long> kLineFetchedAtCache = new HashMap<String, Long>();
     private HashMap<String, String> kLineErrorCache = new HashMap<String, String>();
+    private HashMap<String, String> kLineSourceCache = new HashMap<String, String>();
     private HashSet<String> loadingBoardCodes = new HashSet<String>();
     private HashSet<String> loadingKLineCodes = new HashSet<String>();
     private HashSet<String> addingStockCodes = new HashSet<String>();
@@ -371,7 +372,7 @@ public class MainActivity extends AppCompatActivity {
                 if (event.manual) {
                     String refreshMessage = event.result.totalCount > 0
                             ? getString(R.string.refresh_quote_result, event.result.successCount, event.result.totalCount)
-                            : (event.fetchedIndices.size() > 0 ? "大盘指数已刷新" : "大盘指数刷新失败");
+                            : (event.fetchedIndices.size() > 0 ? getString(R.string.toast_market_index_refreshed) : getString(R.string.toast_market_index_failed));
                     Toast.makeText(MainActivity.this, refreshMessage, Toast.LENGTH_SHORT).show();
                 }
                 if (event.force) {
@@ -407,8 +408,8 @@ public class MainActivity extends AppCompatActivity {
                 }
                 if (event.manual) {
                     String message = event.sourceDegraded
-                            ? (event.usingCachedHotCandidates ? "获取热门数据降级，已加载本地缓存" : "获取热门数据降级，本地无缓存")
-                            : "热门股收集完成：前 " + event.fetched.size() + " 名";
+                            ? (event.usingCachedHotCandidates ? getString(R.string.hot_stocks_degraded_cached) : getString(R.string.hot_stocks_degraded_no_cached))
+                            : getString(R.string.hot_stocks_collect_complete, event.fetched.size());
                     Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
                 }
             }
@@ -745,7 +746,7 @@ public class MainActivity extends AppCompatActivity {
         tabs.addView(spacer(8, 1));
         tabs.addView(tabItem(getString(R.string.tab_news_feed), TAB_NEWS, R.drawable.ic_tab_news), weightWrap(1));
         tabs.addView(spacer(8, 1));
-        tabs.addView(tabItem("Top50热股", TAB_HOT, R.drawable.ic_tab_watchlist), weightWrap(1));
+        tabs.addView(tabItem(getString(R.string.tab_hot_stocks), TAB_HOT, R.drawable.ic_tab_watchlist), weightWrap(1));
         tabs.addView(spacer(8, 1));
         tabs.addView(tabItem(getString(R.string.tab_profile), TAB_PROFILE, R.drawable.ic_tab_profile), weightWrap(1));
         return tabs;
@@ -1162,15 +1163,15 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout header = horizontal();
         header.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout titleBox = vertical();
-        titleBox.addView(text("Top50 热股", 26, COLOR_TEXT, true), matchWrap());
+        titleBox.addView(text(getString(R.string.hot_stocks_title), 26, COLOR_TEXT, true), matchWrap());
         String subtitle = loadingHotCandidates
-                ? "正在收集热度、资金、量价和4日趋势数据"
-                : "主板/创业板，排除688和50元以上，按热度、资金、活跃度和机会排序";
+                ? getString(R.string.hot_stocks_loading_subtitle)
+                : getString(R.string.hot_stocks_subtitle);
         titleBox.addView(text(subtitle, 13, COLOR_SUB, false), matchWrap());
         titleBox.addView(spacer(4));
         titleBox.addView(text(hotDataStatusText(), 13, hotDataStatusColor(), true), matchWrap());
         header.addView(titleBox, weightWrap(1));
-        Button refresh = ghostButton(loadingHotCandidates ? "刷新中" : "刷新");
+        Button refresh = ghostButton(loadingHotCandidates ? getString(R.string.refresh_loading) : getString(R.string.refresh));
         refresh.setEnabled(!loadingHotCandidates);
         refresh.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -1185,20 +1186,20 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout tip = card();
         tip.setPadding(dp(12), dp(10), dp(12), dp(10));
         RealtimeDecisionAnalyzer.MarketPulse pulse = RealtimeDecisionAnalyzer.analyzeMarket(marketIndices);
-        tip.addView(text("即时环境：" + pulse.status + " · " + pulse.summary, 13,
+        tip.addView(text(getString(R.string.market_pulse_format, pulse.status, pulse.summary), 13,
                 realtimeTextColor(pulse.level), true), matchWrap());
         tip.addView(spacer(5));
-        tip.addView(text("候选池按当前可操作性标记为可关注、等回调、待确认或风险高；这里只做实时核验，不保存历史记录。", 13, COLOR_SUB, false), matchWrap());
+        tip.addView(text(getString(R.string.hot_stocks_tips), 13, COLOR_SUB, false), matchWrap());
         page.addView(tip, matchWrap());
         page.addView(spacer(10));
 
         if (hotCandidates.size() == 0) {
             LinearLayout empty = card();
-            empty.addView(text(loadingHotCandidates ? "正在生成候选池" : "暂无Top50热股数据", 18, COLOR_TEXT, true), matchWrap());
+            empty.addView(text(loadingHotCandidates ? getString(R.string.hot_stocks_loading_pool) : getString(R.string.hot_stocks_no_data), 18, COLOR_TEXT, true), matchWrap());
             empty.addView(spacer(8));
             empty.addView(text(loadingHotCandidates
-                    ? "首次刷新需要逐只补查近几日 K 线，请稍等。"
-                    : "点击刷新后，会自动收集热门、有资金流入、交易活跃且短线仍有观察机会的股票。", 14, COLOR_SUB, false), matchWrap());
+                    ? getString(R.string.hot_stocks_loading_kline_desc)
+                    : getString(R.string.hot_stocks_no_data_desc), 14, COLOR_SUB, false), matchWrap());
             page.addView(empty, matchWrap());
             return scrollView;
         }
@@ -1324,22 +1325,22 @@ public class MainActivity extends AppCompatActivity {
      */
     private String hotDataStatusText() {
         if (loadingHotCandidates) {
-            return "正在获取最新数据";
+            return getString(R.string.hot_stocks_status_loading);
         }
         String time = formatHotDataTime(hotDataRefreshedAtMillis);
         String source = hotDataSourceSummary == null || hotDataSourceSummary.length() == 0
-                ? "来源未记录"
+                ? getString(R.string.hot_stocks_source_unrecorded)
                 : hotDataSourceSummary;
         if (HOT_STATUS_CACHED.equals(hotDataStatus)) {
-            return "使用缓存：" + time + "，" + source;
+            return getString(R.string.hot_stocks_status_cached, time, source);
         }
         if (HOT_STATUS_DEGRADED.equals(hotDataStatus)) {
-            return "数据源不完整，实时结果仅供参考：" + time + "，" + source;
+            return getString(R.string.hot_stocks_status_degraded, time, source);
         }
         if (HOT_STATUS_LATEST.equals(hotDataStatus)) {
-            return "最新数据：" + time + "，" + source;
+            return getString(R.string.hot_stocks_status_latest, time, source);
         }
-        return "尚未刷新数据";
+        return getString(R.string.hot_stocks_status_not_refreshed);
     }
 
     /**
@@ -1812,7 +1813,7 @@ public class MainActivity extends AppCompatActivity {
         kLineErrorCache.remove(stock.code);
         refreshKLineCard(stock);
         if (manual) {
-            Toast.makeText(this, "\u6b63\u5728\u5237\u65b0K\u7ebf", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_kline_refreshing), Toast.LENGTH_SHORT).show();
         }
         runInBackground(new Runnable() {
             @Override
@@ -1824,15 +1825,16 @@ public class MainActivity extends AppCompatActivity {
                         loadingKLineCodes.remove(stock.code);
                         if (result.success && result.items.size() > 0) {
                             kLineCache.put(stock.code, result.items);
+                            kLineSourceCache.put(stock.code, result.message);
                             kLineFetchedAtCache.put(stock.code, System.currentTimeMillis());
                             kLineErrorCache.remove(stock.code);
                             if (manual) {
-                                Toast.makeText(MainActivity.this, "\u004b\u7ebf\u5df2\u66f4\u65b0", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(MainActivity.this, getString(R.string.toast_kline_updated), Toast.LENGTH_SHORT).show();
                             }
                         } else {
                             kLineErrorCache.put(stock.code, result.message);
                             if (manual) {
-                                Toast.makeText(MainActivity.this, "\u004b\u7ebf\u83b7\u53d6\u5931\u8d25", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(MainActivity.this, getString(R.string.toast_kline_failed), Toast.LENGTH_SHORT).show();
                             }
                         }
                         if (currentStock != null && stock.code.equals(currentStock.code)) {
@@ -1856,20 +1858,28 @@ public class MainActivity extends AppCompatActivity {
      * K-line status text.
      */
     private String kLineStatusText(Stock stock) {
-        String text = "\u6570\u636e\u6e90\uff1a\u4e1c\u65b9\u8d22\u5bcc\u5386\u53f2\u884c\u60c5";
+        String sourceName = getString(R.string.kline_source_eastmoney);
+        if (stock != null && kLineSourceCache.containsKey(stock.code)) {
+            String srcKey = kLineSourceCache.get(stock.code);
+            if ("Sina".equals(srcKey)) {
+                sourceName = getString(R.string.kline_source_sina);
+            }
+        }
+        String text = getString(R.string.kline_source_format, sourceName);
         if (stock == null || stock.code == null) {
             return text;
         }
         ArrayList<KLineItem> items = kLineCache.get(stock.code);
         if (items != null && items.size() > 0) {
-            text = text + " | " + items.size() + " \u6761";
+            text = text + getString(R.string.kline_count_suffix, items.size());
         }
         Long fetchedAt = kLineFetchedAtCache.get(stock.code);
         if (fetchedAt != null && fetchedAt.longValue() > 0L) {
-            text = text + " | \u66f4\u65b0 " + new SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(new Date(fetchedAt.longValue()));
+            String formattedTime = new SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(new Date(fetchedAt.longValue()));
+            text = text + getString(R.string.kline_update_time, formattedTime);
         }
         if (loadingKLineCodes.contains(stock.code)) {
-            text = text + " | \u52a0\u8f7d\u4e2d";
+            text = text + getString(R.string.kline_status_loading_suffix);
         }
         return text;
     }
@@ -1937,7 +1947,7 @@ public class MainActivity extends AppCompatActivity {
         if (stock == null) {
             return;
         }
-        Toast.makeText(this, "正在刷新当前个股实时数据", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, getString(R.string.toast_refreshing_single_quote), Toast.LENGTH_SHORT).show();
         viewModel.invalidateDetailInputs(stock.code);
         refreshDetailQuoteSections(stock);
         refreshManualStockBoardTheme(stock);
@@ -2947,7 +2957,7 @@ public class MainActivity extends AppCompatActivity {
                         button.setEnabled(true);
                         button.setText(getString(R.string.save));
                         if (identity == null || identity.code.length() == 0 || identity.name.length() == 0) {
-                            Toast.makeText(MainActivity.this, "未找到匹配的A股，请补充股票代码或检查名称", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_stock_not_found), Toast.LENGTH_SHORT).show();
                             return;
                         }
                         if (containsStockCode(identity.code)) {
@@ -2955,7 +2965,7 @@ public class MainActivity extends AppCompatActivity {
                             return;
                         }
                         if (createdStock == null) {
-                            Toast.makeText(MainActivity.this, "股票信息解析失败，请重试", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_stock_parse_failed), Toast.LENGTH_SHORT).show();
                             return;
                         }
                         stockRepository.saveGroupIfNeeded(groupText);
@@ -2964,7 +2974,7 @@ public class MainActivity extends AppCompatActivity {
                         selectedGroup = groupText;
                         dialog.dismiss();
                         showCurrentTab();
-                        Toast.makeText(MainActivity.this, "已添加：" + createdStock.name + " " + createdStock.code, Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, getString(R.string.toast_stock_added, createdStock.name, createdStock.code), Toast.LENGTH_SHORT).show();
                         refreshManualStockBoardTheme(createdStock);
                     }
                 });
@@ -3301,7 +3311,7 @@ public class MainActivity extends AppCompatActivity {
         }
         int targetIndex = toTop ? 0 : stocks.size() - 1;
         if (index == targetIndex) {
-            Toast.makeText(this, stock.name + (toTop ? " 已在顶部" : " 已在底部"), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, toTop ? getString(R.string.toast_stock_already_top, stock.name) : getString(R.string.toast_stock_already_bottom, stock.name), Toast.LENGTH_SHORT).show();
             return;
         }
         Stock moved = stocks.remove(index);
@@ -3313,7 +3323,7 @@ public class MainActivity extends AppCompatActivity {
         saveStocks();
         rememberWatchlistScroll();
         showCurrentTab();
-        Toast.makeText(this, moved.name + (toTop ? " 已置顶" : " 已置底"), Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, toTop ? getString(R.string.toast_stock_moved_top, moved.name) : getString(R.string.toast_stock_moved_bottom, moved.name), Toast.LENGTH_SHORT).show();
     }
 
     /**
@@ -3324,7 +3334,7 @@ public class MainActivity extends AppCompatActivity {
      */
     private void setWatchlistManageMode(boolean enabled) {
         if (enabled && filterStocks().size() == 0) {
-            Toast.makeText(this, "当前列表没有可管理的自选股", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_no_manageable_stock), Toast.LENGTH_SHORT).show();
             return;
         }
         watchlistManageMode = enabled;
@@ -3381,12 +3391,12 @@ public class MainActivity extends AppCompatActivity {
     private void confirmDeleteManagedWatchlistStocks() {
         final int selectedCount = countManagedWatchlistStocks();
         if (selectedCount == 0) {
-            Toast.makeText(this, "请先选择要删除的自选股", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_select_to_delete), Toast.LENGTH_SHORT).show();
             return;
         }
         new AlertDialog.Builder(this)
-                .setTitle("删除自选股")
-                .setMessage("确认删除选中的 " + selectedCount + " 只自选股？决策记录会保留，便于后续复盘。")
+                .setTitle(getString(R.string.delete_stock_title))
+                .setMessage(getString(R.string.toast_delete_managed_stocks_message, selectedCount))
                 .setNegativeButton(getString(R.string.cancel), null)
                 .setPositiveButton(getString(R.string.delete), new android.content.DialogInterface.OnClickListener() {
                     @Override
@@ -3402,7 +3412,7 @@ public class MainActivity extends AppCompatActivity {
                         watchlistManageMode = false;
                         currentStock = null;
                         showCurrentTab();
-                        Toast.makeText(MainActivity.this, "已删除 " + selectedCount + " 只自选股", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, getString(R.string.toast_deleted_count, selectedCount), Toast.LENGTH_SHORT).show();
                     }
                 })
                 .show();
@@ -3414,7 +3424,7 @@ public class MainActivity extends AppCompatActivity {
     private void showMoveManagedWatchlistStocksDialog() {
         final int selectedCount = countManagedWatchlistStocks();
         if (selectedCount == 0) {
-            Toast.makeText(this, "请先选择要移动的自选股", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_select_to_move), Toast.LENGTH_SHORT).show();
             return;
         }
         LinearLayout form = vertical();
@@ -3430,7 +3440,7 @@ public class MainActivity extends AppCompatActivity {
         final EditText newGroup = input(getString(R.string.stock_new_group_hint));
         newGroup.setSingleLine(true);
 
-        form.addView(text("将选中的 " + selectedCount + " 只自选股移动到：", 13, COLOR_SUB, false), matchWrap());
+        form.addView(text(getString(R.string.toast_move_managed_stocks_message, selectedCount), 13, COLOR_SUB, false), matchWrap());
         form.addView(spacer(10));
         form.addView(text(getString(R.string.stock_group_select_hint), 12, COLOR_SUB, false), matchWrap());
         form.addView(groupSpinner, matchHeight(dp(48)));
@@ -3438,10 +3448,10 @@ public class MainActivity extends AppCompatActivity {
         form.addView(newGroup, matchHeight(dp(52)));
 
         final AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("移动分组")
+                .setTitle(getString(R.string.toast_move_group_title))
                 .setView(form)
                 .setNegativeButton(getString(R.string.cancel), null)
-                .setPositiveButton("移动", null)
+                .setPositiveButton(getString(R.string.toast_move_button), null)
                 .create();
         dialog.setOnShowListener(new android.content.DialogInterface.OnShowListener() {
             @Override
@@ -3466,7 +3476,7 @@ public class MainActivity extends AppCompatActivity {
                         watchlistManageMode = false;
                         dialog.dismiss();
                         showCurrentTab();
-                        Toast.makeText(MainActivity.this, "已移动 " + movedCount + " 只自选股", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, getString(R.string.toast_moved_count, movedCount), Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -3493,7 +3503,7 @@ public class MainActivity extends AppCompatActivity {
             if (TAB_HOT.equals(currentTab) && currentStock == null) {
                 rememberHotScroll();
             }
-            Toast.makeText(this, "正在收集Top50热股", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.hot_stocks_collecting), Toast.LENGTH_SHORT).show();
         }
         viewModel.refreshHotCandidates(manual);
     }
@@ -3510,11 +3520,11 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         if (addingStockCodes.contains(candidate.code)) {
-            Toast.makeText(this, "正在同步行情和行业标识", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_syncing_quote_industry), Toast.LENGTH_SHORT).show();
             return;
         }
         addingStockCodes.add(candidate.code);
-        Toast.makeText(this, "正在同步行情和行业标识", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, getString(R.string.toast_syncing_quote_industry), Toast.LENGTH_SHORT).show();
         final HotStockCandidate target = candidate;
         runInBackground(new Runnable() {
             @Override
@@ -3532,7 +3542,7 @@ public class MainActivity extends AppCompatActivity {
                         stocks.add(0, stock);
                         stockRepository.saveGroupIfNeeded(stock.groupName);
                         saveStocks();
-                        Toast.makeText(MainActivity.this, "已加入自选：" + stock.name, Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, getString(R.string.toast_added_to_watchlist, stock.name), Toast.LENGTH_SHORT).show();
                         rememberHotScroll();
                         showCurrentTab();
                     }
@@ -3555,11 +3565,11 @@ public class MainActivity extends AppCompatActivity {
         if (usefulCandidateText(board)) {
             stock.industry = board;
         }
-        stock.mainBusiness = "Top50热股候选：" + candidate.reason;
+        stock.mainBusiness = getString(R.string.hot_stocks_candidate_business, candidate.reason);
         stock.marketValue = candidate.amount;
-        stock.pe = "量比 " + candidate.volumeRatio;
-        stock.revenue = "4日涨幅 " + candidate.fourDayChangePercent + "，活跃 " + candidate.activeDays4d + "/4天";
-        stock.profit = "评分 " + candidate.totalScore;
+        stock.pe = getString(R.string.hot_stocks_volume_ratio_format, candidate.volumeRatio);
+        stock.revenue = getString(R.string.hot_stocks_kline_summary_format, candidate.fourDayChangePercent, candidate.activeDays4d);
+        stock.profit = getString(R.string.hot_stocks_score_format, candidate.totalScore);
         stock.riskTag = candidate.riskTag;
         android.util.Log.d(BOARD_THEME_TAG, "fromHotCandidate " + StockDisplayText.debugSummary(this, stock, 14));
         return stock;

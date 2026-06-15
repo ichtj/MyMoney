@@ -22,17 +22,30 @@ public class StockKLineFetcher {
             return KLineResult.fail("empty stock code");
         }
         int safeLimit = Math.max(30, Math.min(limit, 300));
+        KLineResult eastmoneyResult = fetchFromEastmoney(stock, safeLimit);
+        if (eastmoneyResult.success && eastmoneyResult.items.size() > 0) {
+            return eastmoneyResult;
+        }
+        android.util.Log.i(TAG, "Eastmoney KLine failed, trying Sina fallback. Error: " + eastmoneyResult.message);
+        KLineResult sinaResult = fetchFromSina(stock, safeLimit);
+        if (sinaResult.success && sinaResult.items.size() > 0) {
+            return sinaResult;
+        }
+        return KLineResult.fail("Eastmoney: " + eastmoneyResult.message + "; Sina: " + sinaResult.message);
+    }
+
+    private KLineResult fetchFromEastmoney(Stock stock, int limit) {
         String url = "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid="
                 + secId(stock.code)
                 + "&fields1=f1,f2,f3,f4,f5,f6"
                 + "&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61"
-                + "&klt=101&fqt=1&beg=0&end=20500101&lmt="
-                + safeLimit;
+                + "&klt=101&fqt=1&end=20500101&lmt="
+                + limit;
         try {
             SimpleHttpClient.HttpText response = httpClient.get(url, TIMEOUT_MILLIS, MAX_READ_BYTES,
                     "application/json,text/plain,*/*", USER_AGENT);
             if (!response.isHttpSuccess()) {
-                android.util.Log.w(TAG, "kline http failed code=" + stock.code
+                android.util.Log.w(TAG, "eastmoney kline http failed code=" + stock.code
                         + ", status=" + response.statusCode
                         + ", error=" + response.errorMessage
                         + ", body=" + preview(response.body));
@@ -41,7 +54,7 @@ public class StockKLineFetcher {
 
             JSONObject data = new JSONObject(response.body).optJSONObject("data");
             if (data == null) {
-                android.util.Log.w(TAG, "kline no data code=" + stock.code + ", body=" + preview(response.body));
+                android.util.Log.w(TAG, "eastmoney kline no data code=" + stock.code + ", body=" + preview(response.body));
                 return KLineResult.fail("no kline data");
             }
 
@@ -61,15 +74,67 @@ public class StockKLineFetcher {
                 return KLineResult.fail("invalid kline fields");
             }
 
-            android.util.Log.d(TAG, "kline success code=" + stock.code
+            android.util.Log.d(TAG, "eastmoney kline success code=" + stock.code
                     + ", count=" + items.size()
                     + ", elapsedMs=" + response.elapsedMillis);
-            return KLineResult.success(items);
+            return KLineResult.success(items, "Eastmoney");
         } catch (Exception e) {
-            android.util.Log.w(TAG, "kline failed code=" + stock.code
+            android.util.Log.w(TAG, "eastmoney kline failed code=" + stock.code
                     + ", error=" + e.getClass().getSimpleName() + ": " + e.getMessage());
             return KLineResult.fail(e.getClass().getSimpleName() + ": " + safeMessage(e));
         }
+    }
+
+    private KLineResult fetchFromSina(Stock stock, int limit) {
+        String symbol = sinaSymbol(stock.code);
+        String url = "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol="
+                + symbol
+                + "&scale=240&ma=no&datalen="
+                + limit;
+        try {
+            SimpleHttpClient.HttpText response = httpClient.get(url, TIMEOUT_MILLIS, MAX_READ_BYTES,
+                    "application/json,text/plain,*/*", USER_AGENT);
+            if (!response.isHttpSuccess()) {
+                android.util.Log.w(TAG, "sina kline http failed code=" + stock.code
+                        + ", status=" + response.statusCode
+                        + ", error=" + response.errorMessage);
+                return KLineResult.fail(response.transportSuccess ? "HTTP " + response.statusCode : response.errorMessage);
+            }
+
+            JSONArray arr = new JSONArray(response.body);
+            ArrayList<KLineItem> items = new ArrayList<KLineItem>();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject obj = arr.optJSONObject(i);
+                if (obj == null) {
+                    continue;
+                }
+                String day = obj.optString("day", "");
+                if (day.length() >= 10) {
+                    day = day.substring(0, 10);
+                }
+                double open = obj.optDouble("open", 0d);
+                double close = obj.optDouble("close", 0d);
+                double high = obj.optDouble("high", 0d);
+                double low = obj.optDouble("low", 0d);
+                long volume = obj.optLong("volume", 0L);
+                items.add(new KLineItem(day, open, close, high, low, volume, 0d, 0d, 0d));
+            }
+            if (items.size() == 0) {
+                return KLineResult.fail("empty kline from Sina");
+            }
+            android.util.Log.i(TAG, "sina kline success code=" + stock.code + ", count=" + items.size());
+            return KLineResult.success(items, "Sina");
+        } catch (Exception e) {
+            android.util.Log.w(TAG, "sina kline failed code=" + stock.code
+                    + ", error=" + e.getClass().getSimpleName() + ": " + e.getMessage());
+            return KLineResult.fail(e.getClass().getSimpleName() + ": " + safeMessage(e));
+        }
+    }
+
+    private String sinaSymbol(String code) {
+        String safeCode = code == null ? "" : code.trim();
+        String prefix = safeCode.startsWith("6") || safeCode.startsWith("9") ? "sh" : "sz";
+        return prefix + safeCode;
     }
 
     private KLineItem parseLine(String line) {
@@ -164,6 +229,10 @@ public class StockKLineFetcher {
 
         static KLineResult success(ArrayList<KLineItem> items) {
             return new KLineResult(true, "Eastmoney", items);
+        }
+
+        static KLineResult success(ArrayList<KLineItem> items, String source) {
+            return new KLineResult(true, source, items);
         }
 
         static KLineResult fail(String message) {
