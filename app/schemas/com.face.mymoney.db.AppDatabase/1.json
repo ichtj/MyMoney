@@ -1,0 +1,478 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "fbe81b77d3c7b04c9c8cc6b4b7a9e32c",
+    "entities": [
+      {
+        "tableName": "stocks",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`code` TEXT NOT NULL, `name` TEXT, `market` TEXT, `groupName` TEXT, `remark` TEXT, `price` TEXT, `changePercent` TEXT, `turnover` TEXT, `industry` TEXT, `mainBusiness` TEXT, `marketValue` TEXT, `pe` TEXT, `revenue` TEXT, `profit` TEXT, `riskTag` TEXT, PRIMARY KEY(`code`))",
+        "fields": [
+          {
+            "fieldPath": "code",
+            "columnName": "code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "market",
+            "columnName": "market",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "groupName",
+            "columnName": "groupName",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "remark",
+            "columnName": "remark",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "price",
+            "columnName": "price",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "changePercent",
+            "columnName": "changePercent",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "turnover",
+            "columnName": "turnover",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "industry",
+            "columnName": "industry",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "mainBusiness",
+            "columnName": "mainBusiness",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "marketValue",
+            "columnName": "marketValue",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pe",
+            "columnName": "pe",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "revenue",
+            "columnName": "revenue",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "profit",
+            "columnName": "profit",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "riskTag",
+            "columnName": "riskTag",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "code"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "notes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `stockCode` TEXT, `type` TEXT, `title` TEXT, `content` TEXT, `targetPrice` TEXT, `stopLossPrice` TEXT, `confidence` TEXT, `createdTime` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stockCode",
+            "columnName": "stockCode",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "targetPrice",
+            "columnName": "targetPrice",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "stopLossPrice",
+            "columnName": "stopLossPrice",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "createdTime",
+            "columnName": "createdTime",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "hot_candidates",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`code` TEXT NOT NULL, `name` TEXT, `market` TEXT, `industry` TEXT, `concept` TEXT, `price` TEXT, `changePercent` TEXT, `turnoverRate` TEXT, `amount` TEXT, `volumeRatio` TEXT, `mainNetInflow` TEXT, `fourDayChangePercent` TEXT, `averageAmount4d` TEXT, `averageTurnover4d` TEXT, `activeDays4d` INTEGER NOT NULL, `upDays4d` INTEGER NOT NULL, `limitUpCount5d` INTEGER NOT NULL, `hasRecentLimitUp` INTEGER NOT NULL, `recentTwoDayLimitUp` INTEGER NOT NULL, `hasRecentKlineData` INTEGER NOT NULL, `hasDragonTiger` INTEGER NOT NULL, `hotScore` INTEGER NOT NULL, `limitUpScore` INTEGER NOT NULL, `opportunityScore` INTEGER NOT NULL, `activityScore` INTEGER NOT NULL, `moneyScore` INTEGER NOT NULL, `themeScore` INTEGER NOT NULL, `riskDeduct` INTEGER NOT NULL, `totalScore` INTEGER NOT NULL, `sourceCount` INTEGER NOT NULL, `sourceSummary` TEXT, `sourceChannelSummary` TEXT, `stageTag` TEXT, `sourceQualityTag` TEXT, `reason` TEXT, `riskTag` TEXT, `collectedDate` TEXT, PRIMARY KEY(`code`))",
+        "fields": [
+          {
+            "fieldPath": "code",
+            "columnName": "code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "market",
+            "columnName": "market",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "industry",
+            "columnName": "industry",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "concept",
+            "columnName": "concept",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "price",
+            "columnName": "price",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "changePercent",
+            "columnName": "changePercent",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "turnoverRate",
+            "columnName": "turnoverRate",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "amount",
+            "columnName": "amount",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "volumeRatio",
+            "columnName": "volumeRatio",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "mainNetInflow",
+            "columnName": "mainNetInflow",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "fourDayChangePercent",
+            "columnName": "fourDayChangePercent",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "averageAmount4d",
+            "columnName": "averageAmount4d",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "averageTurnover4d",
+            "columnName": "averageTurnover4d",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "activeDays4d",
+            "columnName": "activeDays4d",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "upDays4d",
+            "columnName": "upDays4d",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "limitUpCount5d",
+            "columnName": "limitUpCount5d",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hasRecentLimitUp",
+            "columnName": "hasRecentLimitUp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recentTwoDayLimitUp",
+            "columnName": "recentTwoDayLimitUp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hasRecentKlineData",
+            "columnName": "hasRecentKlineData",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hasDragonTiger",
+            "columnName": "hasDragonTiger",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hotScore",
+            "columnName": "hotScore",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "limitUpScore",
+            "columnName": "limitUpScore",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "opportunityScore",
+            "columnName": "opportunityScore",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activityScore",
+            "columnName": "activityScore",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moneyScore",
+            "columnName": "moneyScore",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "themeScore",
+            "columnName": "themeScore",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "riskDeduct",
+            "columnName": "riskDeduct",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalScore",
+            "columnName": "totalScore",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceCount",
+            "columnName": "sourceCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceSummary",
+            "columnName": "sourceSummary",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "sourceChannelSummary",
+            "columnName": "sourceChannelSummary",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "stageTag",
+            "columnName": "stageTag",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "sourceQualityTag",
+            "columnName": "sourceQualityTag",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "riskTag",
+            "columnName": "riskTag",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "collectedDate",
+            "columnName": "collectedDate",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "code"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "detail_caches",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`stockCode` TEXT NOT NULL, `newsFetchedAt` INTEGER NOT NULL, `opinionFetchedAt` INTEGER NOT NULL, `analysisFetchedAt` INTEGER NOT NULL, `newsJson` TEXT, `opinionsJson` TEXT, `analysisJson` TEXT, PRIMARY KEY(`stockCode`))",
+        "fields": [
+          {
+            "fieldPath": "stockCode",
+            "columnName": "stockCode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newsFetchedAt",
+            "columnName": "newsFetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "opinionFetchedAt",
+            "columnName": "opinionFetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "analysisFetchedAt",
+            "columnName": "analysisFetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newsJson",
+            "columnName": "newsJson",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "opinionsJson",
+            "columnName": "opinionsJson",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "analysisJson",
+            "columnName": "analysisJson",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "stockCode"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'fbe81b77d3c7b04c9c8cc6b4b7a9e32c')"
+    ]
+  }
+}

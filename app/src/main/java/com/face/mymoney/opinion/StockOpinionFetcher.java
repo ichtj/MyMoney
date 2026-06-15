@@ -229,7 +229,7 @@ public class StockOpinionFetcher {
     private WebText fetch(String url, String source) {
         com.face.mymoney.crawler.SimpleHttpClient.HttpText response = httpClient.get(url, TIMEOUT_MILLIS, MAX_READ_BYTES,
                 "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0");
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
         android.util.Log.d(TAG, "fetch source=" + source + ", status=" + response.statusCode
                 + ", success=" + response.isHttpSuccess()
                 + ", length=" + response.body.length()

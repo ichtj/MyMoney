@@ -12,7 +12,7 @@ public class StockLookupFetcher {
     private static final String TAG = "MyMoneyStockLookup";
     private static final int TIMEOUT_MILLIS = 12000;
     private static final int MAX_READ_BYTES = 128 * 1024;
-    private static final String USER_AGENT = "Mozilla/5.0 MyMoneyBot/1.0";
+    private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
     private static final String EASTMONEY_TOKEN = "D43BF722C8E33BDC906FB84D85E326E8";
 
     private final SimpleHttpClient httpClient = new SimpleHttpClient();

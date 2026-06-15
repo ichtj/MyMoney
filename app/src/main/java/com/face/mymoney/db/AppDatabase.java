@@ -11,7 +11,7 @@ import com.face.mymoney.model.DecisionNote;
 import com.face.mymoney.model.HotStockCandidate;
 import com.face.mymoney.model.Stock;
 
-@Database(entities = {Stock.class, DecisionNote.class, HotStockCandidate.class, DetailCacheEntity.class}, version = 1, exportSchema = false)
+@Database(entities = {Stock.class, DecisionNote.class, HotStockCandidate.class, DetailCacheEntity.class}, version = 1, exportSchema = true)
 public abstract class AppDatabase extends RoomDatabase {
     private static final String DATABASE_NAME = "mymoney.db";
     private static volatile AppDatabase instance;
@@ -28,7 +28,6 @@ public abstract class AppDatabase extends RoomDatabase {
                     instance = Room.databaseBuilder(context.getApplicationContext(),
                                     AppDatabase.class, DATABASE_NAME)
                             .allowMainThreadQueries()
-                            .fallbackToDestructiveMigration()
                             .build();
                 }
             }

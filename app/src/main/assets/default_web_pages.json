@@ -8,7 +8,7 @@
     "parserType": "html",
     "enabled": true,
     "charset": "UTF-8",
-    "userAgent": "MyMoneyBot/1.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "delayMillis": 3000,
     "timeoutMillis": 15000,
     "selectors": {
@@ -26,7 +26,7 @@
     "parserType": "html",
     "enabled": true,
     "charset": "UTF-8",
-    "userAgent": "MyMoneyBot/1.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "delayMillis": 3000,
     "timeoutMillis": 15000,
     "selectors": {
@@ -44,7 +44,7 @@
     "parserType": "html",
     "enabled": true,
     "charset": "UTF-8",
-    "userAgent": "MyMoneyBot/1.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "delayMillis": 3000,
     "timeoutMillis": 15000,
     "selectors": {
@@ -62,7 +62,7 @@
     "parserType": "html",
     "enabled": true,
     "charset": "UTF-8",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "delayMillis": 300,
     "timeoutMillis": 15000,
     "selectors": {
@@ -80,7 +80,7 @@
     "parserType": "eastmoney_search_json",
     "enabled": true,
     "charset": "UTF-8",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "delayMillis": 300,
     "timeoutMillis": 15000,
     "selectors": {
@@ -98,7 +98,7 @@
     "parserType": "eastmoney_search_json",
     "enabled": true,
     "charset": "UTF-8",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "delayMillis": 300,
     "timeoutMillis": 15000,
     "selectors": {
@@ -116,7 +116,7 @@
     "parserType": "eastmoney_search_json",
     "enabled": true,
     "charset": "UTF-8",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "delayMillis": 300,
     "timeoutMillis": 15000,
     "selectors": {
@@ -134,7 +134,7 @@
     "parserType": "eastmoney_notice_json",
     "enabled": true,
     "charset": "UTF-8",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "delayMillis": 300,
     "timeoutMillis": 15000,
     "selectors": {
@@ -152,7 +152,7 @@
     "parserType": "eastmoney_column_json",
     "enabled": true,
     "charset": "UTF-8",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "delayMillis": 300,
     "timeoutMillis": 15000,
     "selectors": {
@@ -170,7 +170,7 @@
     "parserType": "eastmoney_column_json",
     "enabled": true,
     "charset": "UTF-8",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "delayMillis": 300,
     "timeoutMillis": 15000,
     "selectors": {
@@ -188,7 +188,7 @@
     "parserType": "eastmoney_hsf10",
     "enabled": true,
     "charset": "UTF-8",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "delayMillis": 300,
     "timeoutMillis": 15000,
     "selectors": {
@@ -206,7 +206,7 @@
     "parserType": "rss",
     "enabled": true,
     "charset": "UTF-8",
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 MyMoneyBot/1.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "delayMillis": 300,
     "timeoutMillis": 15000,
     "selectors": {

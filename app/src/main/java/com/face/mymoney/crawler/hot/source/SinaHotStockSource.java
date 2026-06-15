@@ -12,7 +12,7 @@ public class SinaHotStockSource implements HotStockSource {
     private static final int TIMEOUT_MILLIS = 15000;
     private static final int MAX_READ_BYTES = 512 * 1024;
     private static final int MAX_PAGE = 4;
-    private static final String USER_AGENT = "Mozilla/5.0 MyMoneyBot/1.0";
+    private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
     private static final String[] NODES = new String[]{"sh_a", "sz_a", "cyb"};
 
     private final SimpleHttpClient httpClient = new SimpleHttpClient();

@@ -44,7 +44,6 @@ import com.face.mymoney.crawler.StockKLineFetcher;
 import com.face.mymoney.crawler.StockLookupFetcher;
 import com.face.mymoney.crawler.StockNewsFetcher;
 import com.face.mymoney.crawler.StockQuoteFetcher;
-import com.face.mymoney.data.DetailCache;
 import com.face.mymoney.data.HotStockCandidateRepository;
 import com.face.mymoney.data.LocalStockRepository;
 import com.face.mymoney.model.DecisionNote;
@@ -61,10 +60,14 @@ import com.face.mymoney.ratio.WinLossRatioInput;
 import com.face.mymoney.ratio.WinLossRatioResult;
 import com.face.mymoney.ui.MainUiKit;
 import com.face.mymoney.ui.StockDisplayText;
+import com.face.mymoney.ui.detail.RealtimeDecisionCard;
+import com.face.mymoney.ui.detail.StockDetailCards;
+import com.face.mymoney.ui.detail.StockDetailPageBuilder;
+import com.face.mymoney.ui.detail.StockKLineCard;
+import com.face.mymoney.ui.detail.StockOpinionListView;
 import com.face.mymoney.ui.detail.WinLossRatioCard;
 import com.face.mymoney.ui.home.HomePageBuilder;
 import com.face.mymoney.ui.login.LoginPageBuilder;
-import com.face.mymoney.ui.widget.KLineChartView;
 import com.face.mymoney.ui.widget.PullRefreshScrollView;
 
 import java.text.SimpleDateFormat;
@@ -109,18 +112,9 @@ public class MainActivity extends AppCompatActivity {
     private ArrayList<MarketIndexQuote> marketIndices = new ArrayList<MarketIndexQuote>();
     private ArrayList<HotStockCandidate> hotCandidates = new ArrayList<HotStockCandidate>();
     private ArrayList<News> importantNewsCache = new ArrayList<News>();
-    private HashMap<String, ArrayList<News>> newsCache = new HashMap<String, ArrayList<News>>();
-    private HashMap<String, ArrayList<Opinion>> opinionCache = new HashMap<String, ArrayList<Opinion>>();
-    private HashMap<String, DeepSeekAnalysisResult> deepSeekAnalysisCache = new HashMap<String, DeepSeekAnalysisResult>();
     private HashMap<String, ArrayList<KLineItem>> kLineCache = new HashMap<String, ArrayList<KLineItem>>();
-    private HashMap<String, Long> newsFetchedAtCache = new HashMap<String, Long>();
-    private HashMap<String, Long> opinionFetchedAtCache = new HashMap<String, Long>();
-    private HashMap<String, Long> analysisFetchedAtCache = new HashMap<String, Long>();
     private HashMap<String, Long> kLineFetchedAtCache = new HashMap<String, Long>();
     private HashMap<String, String> kLineErrorCache = new HashMap<String, String>();
-    private HashSet<String> loadingNewsCodes = new HashSet<String>();
-    private HashSet<String> loadingOpinionCodes = new HashSet<String>();
-    private HashSet<String> loadingDeepSeekCodes = new HashSet<String>();
     private HashSet<String> loadingBoardCodes = new HashSet<String>();
     private HashSet<String> loadingKLineCodes = new HashSet<String>();
     private HashSet<String> addingStockCodes = new HashSet<String>();
@@ -306,13 +300,11 @@ public class MainActivity extends AppCompatActivity {
                     }
                 } else if ("subscribed".equals(event)) {
                     subscribedNewsLoadedOnce = true;
-                    syncNewsCache();
                     if (TAB_NEWS.equals(currentTab)) {
                         finishNewsPullRefreshIfNeeded();
                         showCurrentTab();
                     }
                 } else {
-                    syncNewsCache();
                     if (currentStock != null && event.equals(currentStock.code)) {
                         refreshSourceSection(currentStock, true);
                         refreshRealtimeDecisionCard(currentStock);
@@ -326,7 +318,6 @@ public class MainActivity extends AppCompatActivity {
         viewModel.getOpinionsLoadedEvent().observe(this, new androidx.lifecycle.Observer<String>() {
             @Override
             public void onChanged(String stockCode) {
-                syncOpinionCache();
                 if (currentStock != null && stockCode.equals(currentStock.code)) {
                     refreshSourceSection(currentStock, false);
                     refreshRealtimeDecisionCard(currentStock);
@@ -341,13 +332,10 @@ public class MainActivity extends AppCompatActivity {
             public void onChanged(String event) {
                 if (event.endsWith("_loading")) {
                     String code = event.substring(0, event.indexOf("_loading"));
-                    loadingDeepSeekCodes.add(code);
                     if (currentStock != null && code.equals(currentStock.code)) {
                         refreshWinLossRatioCard(currentStock);
                     }
                 } else {
-                    loadingDeepSeekCodes.remove(event);
-                    syncDeepSeekCache();
                     if (currentStock != null && event.equals(currentStock.code)) {
                         refreshRealtimeDecisionCard(currentStock);
                         refreshWinLossRatioCard(currentStock);
@@ -427,46 +415,36 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void syncNewsCache() {
-        if (stocks == null) return;
-        for (Stock stock : stocks) {
-            ArrayList<News> news = viewModel.getNewsCache(stock.code);
-            if (news != null) {
-                newsCache.put(stock.code, news);
-            }
-            Long t = viewModel.getNewsFetchedAt(stock.code);
-            if (t != null) {
-                newsFetchedAtCache.put(stock.code, t);
-            }
-        }
+    private ArrayList<News> cachedNews(Stock stock) {
+        return stock == null ? null : viewModel.getNewsCache(stock.code);
     }
 
-    private void syncOpinionCache() {
-        if (stocks == null) return;
-        for (Stock stock : stocks) {
-            ArrayList<Opinion> opinions = viewModel.getOpinionCache(stock.code);
-            if (opinions != null) {
-                opinionCache.put(stock.code, opinions);
-            }
-            Long t = viewModel.getOpinionFetchedAt(stock.code);
-            if (t != null) {
-                opinionFetchedAtCache.put(stock.code, t);
-            }
-        }
+    private ArrayList<Opinion> cachedOpinions(Stock stock) {
+        return stock == null ? null : viewModel.getOpinionCache(stock.code);
     }
 
-    private void syncDeepSeekCache() {
-        if (stocks == null) return;
-        for (Stock stock : stocks) {
-            DeepSeekAnalysisResult res = viewModel.getDeepSeekAnalysisCache(stock.code);
-            if (res != null) {
-                deepSeekAnalysisCache.put(stock.code, res);
-            }
-            Long t = viewModel.getAnalysisFetchedAt(stock.code);
-            if (t != null) {
-                analysisFetchedAtCache.put(stock.code, t);
-            }
-        }
+    private DeepSeekAnalysisResult cachedAnalysis(Stock stock) {
+        return stock == null ? null : viewModel.getDeepSeekAnalysisCache(stock.code);
+    }
+
+    private Long newsFetchedAt(Stock stock) {
+        return stock == null ? null : viewModel.getNewsFetchedAt(stock.code);
+    }
+
+    private Long opinionFetchedAt(Stock stock) {
+        return stock == null ? null : viewModel.getOpinionFetchedAt(stock.code);
+    }
+
+    private Long analysisFetchedAt(Stock stock) {
+        return stock == null ? null : viewModel.getAnalysisFetchedAt(stock.code);
+    }
+
+    private boolean isLoadingNews(Stock stock) {
+        return stock != null && viewModel.isLoadingNews(stock.code);
+    }
+
+    private boolean isLoadingDeepSeek(Stock stock) {
+        return stock != null && viewModel.isLoadingDeepSeek(stock.code);
     }
 
     @Override
@@ -732,17 +710,9 @@ public class MainActivity extends AppCompatActivity {
         WinLossRatioCalculator calculator = new WinLossRatioCalculator();
         for (int i = 0; i < displayStocks.size(); i++) {
             Stock stock = displayStocks.get(i);
-            DeepSeekAnalysisResult analysis = deepSeekAnalysisCache.get(stock.code);
-            Long fetchedAt = analysisFetchedAtCache.get(stock.code);
-            if (analysis == null || fetchedAt == null) {
-                DetailCache cache = stockRepository.loadDetailCache(stock.code);
-                analysis = cache.analysis;
-                fetchedAt = cache.analysisFetchedAt > 0L ? Long.valueOf(cache.analysisFetchedAt) : null;
-                if (analysis != null && fetchedAt != null && !isDetailCacheExpired(fetchedAt)) {
-                    deepSeekAnalysisCache.put(stock.code, analysis);
-                    analysisFetchedAtCache.put(stock.code, fetchedAt);
-                }
-            }
+            viewModel.prepareDetailCache(stock);
+            DeepSeekAnalysisResult analysis = cachedAnalysis(stock);
+            Long fetchedAt = analysisFetchedAt(stock);
             if (isValidWinLossAiReference(analysis, fetchedAt)) {
                 WinLossRatioResult ratio = calculator.calculate(
                         new WinLossRatioInput(stock, getNotes(stock.code), analysis));
@@ -1722,135 +1692,59 @@ public class MainActivity extends AppCompatActivity {
         currentStock = stock;
         setDetailBackEnabled(true);
         prepareDetailCache(stock);
+        ArrayList<News> cachedNews = cachedNews(stock);
         android.util.Log.d(TAG, "showStockDetail code=" + stock.code
                 + ", name=" + stock.name
-                + ", cachedNews=" + (newsCache.get(stock.code) == null ? "null" : newsCache.get(stock.code).size())
-                + ", loading=" + loadingNewsCodes.contains(stock.code));
+                + ", cachedNews=" + (cachedNews == null ? "null" : cachedNews.size())
+                + ", loading=" + isLoadingNews(stock));
         root.removeAllViews();
 
-        LinearLayout detailShell = new LinearLayout(this);
-        detailShell.setOrientation(LinearLayout.VERTICAL);
-        detailShell.setBackgroundColor(Color.rgb(245, 247, 251));
-        final ScrollView scrollView = new ScrollView(this);
-        scrollView.setFillViewport(true);
-        LinearLayout page = vertical();
-        page.setPadding(dp(14), dp(10), dp(14), dp(22));
-        scrollView.addView(page, pageParams(true));
+        StockDetailPageBuilder.Result result = new StockDetailPageBuilder(this, ui,
+                new StockDetailPageBuilder.Listener() {
+                    @Override
+                    public void onBack() {
+                        leaveStockDetail();
+                    }
 
-        LinearLayout nav = horizontal();
-        nav.setGravity(Gravity.CENTER_VERTICAL);
-        nav.setPadding(dp(14), dp(8), dp(14), dp(8));
-        nav.setBackgroundColor(Color.rgb(245, 247, 251));
-        Button back = ghostButton(getString(R.string.back));
-        back.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                leaveStockDetail();
-            }
-        });
-        nav.addView(back, wrapHeight(dp(36)));
-        nav.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
-        Button addTopNote = primaryButton(getString(R.string.add_note_button));
-        addTopNote.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showAddNoteDialog(stock);
-            }
-        });
-        nav.addView(addTopNote, wrapHeight(dp(36)));
-        nav.addView(spacer(8, 1));
-        Button refresh = ghostButton("刷新");
-        refresh.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                refreshCurrentStockRealtime(stock);
-            }
-        });
-        nav.addView(refresh, wrapHeight(dp(36)));
-        nav.addView(spacer(8, 1));
-        Button delete = ghostButton(getString(R.string.delete));
-        delete.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                confirmDeleteStock(stock);
-            }
-        });
-        nav.addView(delete, wrapHeight(dp(36)));
-        currentHeroContainer = vertical();
-        currentHeroContainer.addView(heroCard(stock), matchWrap());
-        page.addView(currentHeroContainer, matchWrap());
-        page.addView(spacer(10));
+                    @Override
+                    public void onAddNote(Stock selectedStock) {
+                        showAddNoteDialog(selectedStock);
+                    }
 
-        currentKLineContainer = vertical();
-        currentKLineContainer.addView(kLineCard(stock), matchWrap());
-        page.addView(currentKLineContainer, matchWrap());
-        page.addView(spacer(10));
+                    @Override
+                    public void onRefresh(Stock selectedStock) {
+                        refreshCurrentStockRealtime(selectedStock);
+                    }
 
-        currentRealtimeContainer = vertical();
-        currentRealtimeContainer.addView(realtimeDecisionCard(stock), matchWrap());
-        page.addView(currentRealtimeContainer, matchWrap());
-        page.addView(spacer(10));
+                    @Override
+                    public void onDelete(Stock selectedStock) {
+                        confirmDeleteStock(selectedStock);
+                    }
+                },
+                stock,
+                heroCard(stock),
+                kLineCard(stock),
+                realtimeDecisionCard(stock),
+                winLossRatioCard(stock),
+                companyCard(stock),
+                newsList(stock),
+                opinionList(stock),
+                noteList(stock)).build();
 
-        currentWinLossContainer = vertical();
-        currentWinLossContainer.addView(winLossRatioCard(stock), matchWrap());
-        page.addView(currentWinLossContainer, matchWrap());
-        page.addView(spacer(10));
+        currentHeroContainer = result.heroContainer;
+        currentKLineContainer = result.kLineContainer;
+        currentRealtimeContainer = result.realtimeContainer;
+        currentWinLossContainer = result.winLossContainer;
+        currentCompanyContainer = result.companyContainer;
+        currentNewsContainer = result.newsContainer;
+        currentOpinionContainer = result.opinionContainer;
+        currentNoteContainer = result.noteContainer;
 
-        page.addView(sectionTitle(getString(R.string.company_info)), matchWrap());
-        currentCompanyContainer = vertical();
-        currentCompanyContainer.addView(companyCard(stock), matchWrap());
-        page.addView(currentCompanyContainer, matchWrap());
-        page.addView(spacer(10));
-
-        page.addView(sectionTitle(getString(R.string.news_section)), matchWrap());
-        currentNewsContainer = vertical();
-        currentNewsContainer.addView(newsList(stock), matchWrap());
-        page.addView(currentNewsContainer, matchWrap());
-        page.addView(spacer(10));
-
-        page.addView(sectionTitle(getString(R.string.opinion_section)), matchWrap());
-        currentOpinionContainer = vertical();
-        currentOpinionContainer.addView(opinionList(stock), matchWrap());
-        page.addView(currentOpinionContainer, matchWrap());
-        page.addView(spacer(10));
-
-        LinearLayout noteHeader = horizontal();
-        noteHeader.setGravity(Gravity.CENTER_VERTICAL);
-        noteHeader.addView(sectionTitle(getString(R.string.my_notes)), weightWrap(1));
-        Button addNote = primaryButton(getString(R.string.add_note_button));
-        addNote.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                showAddNoteDialog(stock);
-            }
-        });
-        noteHeader.addView(addNote, wrapHeight(dp(36)));
-        page.addView(noteHeader, matchWrap());
-        currentNoteContainer = vertical();
-        currentNoteContainer.addView(noteList(stock), matchWrap());
-        page.addView(currentNoteContainer, matchWrap());
-
-        detailShell.addView(nav, matchWrap());
-        detailShell.addView(scrollView, new LinearLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                0,
-                1));
-        root.addView(detailShell, matchMatch());
-        restoreDetailScroll(scrollView);
+        root.addView(result.root, matchMatch());
+        restoreDetailScroll(result.scrollView);
         loadStockKLineIfNeeded(stock, false);
         refreshExpiredDetailData(stock);
         loadDeepSeekAnalysisIfReady(stock);
-    }
-
-    /**
-     * quoteitem。
-     */
-    private View quoteItem(String label, String value, int valueColor) {
-        LinearLayout box = vertical();
-        box.addView(text(label, 12, Color.rgb(203, 213, 225), false), matchWrap());
-        box.addView(spacer(4));
-        box.addView(text(value, 18, valueColor, true), matchWrap());
-        return box;
     }
 
     /**
@@ -1858,77 +1752,24 @@ public class MainActivity extends AppCompatActivity {
      */
     private View heroCard(Stock stock) {
         android.util.Log.d(BOARD_THEME_TAG, "detailHero " + StockDisplayText.debugSummary(this, stock, 14));
-        LinearLayout hero = card();
-        hero.setPadding(dp(14), dp(12), dp(14), dp(12));
-        hero.setBackground(rounded(COLOR_TEXT, dp(16)));
-
-        LinearLayout top = horizontal();
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout titleBox = vertical();
-        titleBox.addView(singleLineText(stock.name, 22, Color.WHITE, true), matchWrap());
-        titleBox.addView(spacer(3));
-        titleBox.addView(singleLineText(stock.code + " · " + stock.market + " · " + stock.groupName,
-                12, Color.rgb(203, 213, 225), false), matchWrap());
-        top.addView(titleBox, weightWrap(1));
-
-        LinearLayout priceBox = vertical();
-        priceBox.setGravity(Gravity.RIGHT);
-        TextView price = singleLineText(stock.price, 22, Color.WHITE, true);
-        price.setGravity(Gravity.RIGHT);
-        priceBox.addView(price, matchWrap());
-        int changeColor = stock.changePercent.startsWith("-") ? Color.rgb(96, 211, 148) : Color.rgb(255, 138, 128);
-        TextView change = singleLineText(stock.changePercent, 14, changeColor, true);
-        change.setGravity(Gravity.RIGHT);
-        priceBox.addView(change, matchWrap());
-        top.addView(priceBox, new LinearLayout.LayoutParams(dp(110), android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
-        hero.addView(top, matchWrap());
-
-        hero.addView(spacer(8));
-        LinearLayout sub = horizontal();
-        sub.addView(text(getString(R.string.quote_turnover) + " " + stock.turnover, 12, Color.rgb(203, 213, 225), false), weightWrap(1));
-        sub.addView(text(/*getString(R.string.stock_board) + " " + */stockBoardText(stock), 12, Color.rgb(203, 213, 225), false), wrapWrap());
-        hero.addView(sub, matchWrap());
-        return hero;
+        return StockDetailCards.hero(this, ui, stock);
     }
 
     /**
      * K-line chart card.
      */
     private View kLineCard(final Stock stock) {
-        LinearLayout card = card();
-        card.setPadding(dp(14), dp(12), dp(14), dp(12));
-
-        LinearLayout header = horizontal();
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout titleBox = vertical();
-        titleBox.addView(text("\u65e5 K \u7ebf", 18, COLOR_TEXT, true), matchWrap());
-        titleBox.addView(text("\u8fd1 120 \u4e2a\u4ea4\u6613\u65e5\uff0c\u53ef\u6a2a\u5411\u6ed1\u52a8\u67e5\u770b\u65e7\u6570\u636e", 12, COLOR_SUB, false), matchWrap());
-        header.addView(titleBox, weightWrap(1));
-        Button refresh = ghostButton(loadingKLineCodes.contains(stock.code)
-                ? "\u52a0\u8f7d\u4e2d"
-                : "\u5237\u65b0K\u7ebf");
-        refresh.setEnabled(!loadingKLineCodes.contains(stock.code));
-        refresh.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                loadStockKLine(stock, true);
-            }
-        });
-        header.addView(refresh, wrapHeight(dp(34)));
-        card.addView(header, matchWrap());
-        card.addView(spacer(10));
-
-        KLineChartView chartView = new KLineChartView(this);
-        chartView.setKLines(kLineCache.get(stock.code));
-        chartView.setLoading(loadingKLineCodes.contains(stock.code));
-        chartView.setErrorMessage(kLineErrorCache.get(stock.code));
-        card.addView(chartView, new LinearLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(240)));
-
-        card.addView(spacer(6));
-        card.addView(text(kLineStatusText(stock), 11, COLOR_SUB, false), matchWrap());
-        return card;
+        return StockKLineCard.create(this, ui,
+                kLineCache.get(stock.code),
+                loadingKLineCodes.contains(stock.code),
+                kLineErrorCache.get(stock.code),
+                kLineStatusText(stock),
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        loadStockKLine(stock, true);
+                    }
+                });
     }
 
     /**
@@ -2037,7 +1878,7 @@ public class MainActivity extends AppCompatActivity {
      * 构建即时分析卡片。
      */
     private View realtimeDecisionCard(Stock stock) {
-        ArrayList<News> newsList = newsCache.get(stock.code);
+        ArrayList<News> newsList = cachedNews(stock);
         if (newsList == null) {
             newsList = new ArrayList<News>();
         } else {
@@ -2059,92 +1900,23 @@ public class MainActivity extends AppCompatActivity {
         RealtimeDecisionAnalyzer.StockSignal signal = RealtimeDecisionAnalyzer.analyzeStock(
                 stock,
                 newsList,
-                opinionCache.get(stock.code),
-                newsFetchedAtCache.get(stock.code),
-                opinionFetchedAtCache.get(stock.code),
-                deepSeekAnalysisCache.get(stock.code),
-                analysisFetchedAtCache.get(stock.code),
+                cachedOpinions(stock),
+                newsFetchedAt(stock),
+                opinionFetchedAt(stock),
+                cachedAnalysis(stock),
+                analysisFetchedAt(stock),
                 marketIndices,
                 hotCandidates,
                 System.currentTimeMillis());
 
-        LinearLayout card = card();
-        card.setPadding(dp(14), dp(12), dp(14), dp(12));
-
-        LinearLayout header = horizontal();
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout titleBox = vertical();
-        titleBox.addView(text("即时分析", 18, COLOR_TEXT, true), matchWrap());
-        titleBox.addView(text("只基于当前行情、指数、新闻/观点和 AI 分项，不保存历史记录。", 12, COLOR_SUB, false), matchWrap());
-        header.addView(titleBox, weightWrap(1));
-        header.addView(realtimeChip(signal.status, signal.level), wrapWrap());
-        card.addView(header, matchWrap());
-
+        RealtimeDecisionAnalyzer.NewsValClassification linkedClassification = null;
         if (linkedNewsEvent != null) {
-            card.addView(spacer(8));
-            LinearLayout linkedBox = vertical();
-            linkedBox.setPadding(dp(12), dp(10), dp(12), dp(10));
-            linkedBox.setBackground(rounded(Color.rgb(254, 243, 199), dp(8)));
-            
-            LinearLayout linkedTitleRow = horizontal();
-            linkedTitleRow.setGravity(Gravity.CENTER_VERTICAL);
-            linkedTitleRow.addView(text("🔗 关联触发事件", 12, Color.rgb(180, 83, 9), true), weightWrap(1));
-            
             ArrayList<Stock> singleStockList = new ArrayList<Stock>();
             singleStockList.add(stock);
-            com.face.mymoney.realtime.RealtimeDecisionAnalyzer.NewsValClassification linkedCl = 
-                    com.face.mymoney.realtime.RealtimeDecisionAnalyzer.classifyNews(linkedNewsEvent, singleStockList);
-            
-            linkedTitleRow.addView(realtimeChip(linkedCl.category, linkedCl.level), wrapWrap());
-            linkedBox.addView(linkedTitleRow, matchWrap());
-            linkedBox.addView(spacer(4));
-            
-            TextView eventTitleText = text(linkedNewsEvent.title, 13, COLOR_TEXT, true);
-            eventTitleText.setLineSpacing(dp(2), 1.0f);
-            linkedBox.addView(eventTitleText, matchWrap());
-            
-            String explanation = linkedCl.relationType;
-            if (linkedCl.matchedKeyword.length() > 0) {
-                explanation = explanation + " · " + linkedCl.matchedKeyword;
-            }
-            linkedBox.addView(spacer(2));
-            linkedBox.addView(text(explanation + " (" + linkedNewsEvent.source + ")", 11, COLOR_SUB, false), matchWrap());
-            
-            card.addView(linkedBox, matchWrap());
+            linkedClassification = RealtimeDecisionAnalyzer.classifyNews(linkedNewsEvent, singleStockList);
         }
 
-        card.addView(spacer(10));
-        TextView summary = text(signal.summary, 14, COLOR_TEXT, false);
-        summary.setLineSpacing(dp(3), 1.0f);
-        summary.setPadding(dp(12), dp(9), dp(12), dp(9));
-        summary.setBackground(rounded(realtimeSoftColor(signal.level), dp(12)));
-        card.addView(summary, matchWrap());
-
-        card.addView(spacer(10));
-        LinearLayout freshness = horizontal();
-        freshness.setGravity(Gravity.CENTER_VERTICAL);
-        freshness.addView(realtimeSmallChip(signal.newsFreshness), wrapWrap());
-        freshness.addView(spacer(6, 1));
-        freshness.addView(realtimeSmallChip(signal.opinionFreshness), wrapWrap());
-        freshness.addView(spacer(6, 1));
-        freshness.addView(realtimeSmallChip(signal.aiFreshness), wrapWrap());
-        card.addView(freshness, matchWrap());
-
-        card.addView(spacer(10));
-        card.addView(realtimeLine("市场环境", signal.marketStatus + " · " + signal.marketSummary), matchWrap());
-        card.addView(spacer(6));
-        card.addView(realtimeLine("盘中状态", signal.intradayStatus + " · " + signal.intradaySummary), matchWrap());
-        card.addView(spacer(6));
-        card.addView(realtimeLine("板块联动", signal.sectorStatus + " · " + signal.sectorSummary), matchWrap());
-        card.addView(spacer(6));
-        card.addView(realtimeLine("事件强度", signal.newsStatus + " · " + signal.newsSummary), matchWrap());
-        card.addView(spacer(6));
-        card.addView(realtimeLine("事件细节", signal.newsDetail), matchWrap());
-        card.addView(spacer(6));
-        card.addView(realtimeLine("因子克制", signal.factorDiscipline), matchWrap());
-        card.addView(spacer(6));
-        card.addView(realtimeLine("风险触发", signal.riskText), matchWrap());
-        return card;
+        return RealtimeDecisionCard.create(ui, signal, linkedNewsEvent, linkedClassification);
     }
 
     /**
@@ -2166,9 +1938,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         Toast.makeText(this, "正在刷新当前个股实时数据", Toast.LENGTH_SHORT).show();
-        newsFetchedAtCache.remove(stock.code);
-        opinionFetchedAtCache.remove(stock.code);
-        invalidateDetailAnalysis(stock.code);
+        viewModel.invalidateDetailInputs(stock.code);
         refreshDetailQuoteSections(stock);
         refreshManualStockBoardTheme(stock);
         refreshQuotes(false, true);
@@ -2178,35 +1948,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 即时分析信息行。
-     */
-    private View realtimeLine(String label, String value) {
-        LinearLayout row = horizontal();
-        row.setGravity(Gravity.TOP);
-        TextView labelView = text(label, 12, COLOR_SUB, true);
-        row.addView(labelView, new LinearLayout.LayoutParams(dp(66), android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
-        TextView valueView = text(value, 12, COLOR_TEXT, false);
-        valueView.setLineSpacing(dp(2), 1.0f);
-        row.addView(valueView, weightWrap(1));
-        return row;
-    }
-
-    /**
      * 即时分析状态标签。
      */
     private TextView realtimeChip(String value, int level) {
         return tag(value, realtimeSoftColor(level), realtimeTextColor(level));
-    }
-
-    /**
-     * 即时分析小标签。
-     */
-    private TextView realtimeSmallChip(String value) {
-        TextView chip = text(value, 11, COLOR_SUB, true);
-        chip.setGravity(Gravity.CENTER);
-        chip.setPadding(dp(8), dp(4), dp(8), dp(4));
-        chip.setBackground(rounded(Color.rgb(248, 250, 252), dp(12)));
-        return chip;
     }
 
     private int realtimeSoftColor(int level) {
@@ -2251,7 +1996,7 @@ public class MainActivity extends AppCompatActivity {
      */
     private View winLossRatioCard(Stock stock) {
         return WinLossRatioCard.create(this, stock, getNotes(stock.code),
-                deepSeekAnalysisCache.get(stock.code), loadingDeepSeekCodes.contains(stock.code),
+                cachedAnalysis(stock), isLoadingDeepSeek(stock),
                 new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
@@ -2276,46 +2021,7 @@ public class MainActivity extends AppCompatActivity {
      */
     private View companyCard(Stock stock) {
         android.util.Log.d(BOARD_THEME_TAG, "detailCompany " + StockDisplayText.debugSummary(this, stock, 14));
-        LinearLayout card = card();
-        card.setPadding(dp(14), dp(12), dp(14), dp(12));
-        LinearLayout row1 = horizontal();
-        row1.addView(compactInfo(getString(R.string.market_value), stock.marketValue), weightWrap(1));
-        row1.addView(spacer(8, 1));
-        row1.addView(compactInfo(getString(R.string.pe_label), stock.pe), weightWrap(1));
-        card.addView(row1, matchWrap());
-        card.addView(spacer(8));
-        LinearLayout row2 = horizontal();
-        row2.addView(compactInfo(getString(R.string.revenue_profit), stock.revenue + " / " + stock.profit), weightWrap(1));
-        row2.addView(spacer(8, 1));
-        row2.addView(compactInfo(getString(R.string.risk_tag), stock.riskTag), weightWrap(1));
-        card.addView(row2, matchWrap());
-        card.addView(spacer(8));
-        LinearLayout row3 = horizontal();
-        row3.addView(compactInfo(getString(R.string.stock_board), stockBoardText(stock)), matchWrap());
-        card.addView(row3, matchWrap());
-        card.addView(spacer(8));
-        card.addView(infoRow(getString(R.string.main_business), stock.mainBusiness), matchWrap());
-        return card;
-    }
-
-    /**
-     * compactinfo。
-     */
-    private View compactInfo(String label, String value) {
-        LinearLayout box = vertical();
-        box.setPadding(dp(10), dp(8), dp(10), dp(8));
-        box.setBackground(rounded(Color.rgb(248, 250, 252), dp(10)));
-        box.addView(singleLineText(label, 11, COLOR_SUB, false), matchWrap());
-        box.addView(spacer(3));
-        box.addView(singleLineText(value, 13, COLOR_TEXT, true), matchWrap());
-        return box;
-    }
-
-    /**
-     * 股票board创建文本控件。
-     */
-    private String stockBoardText(Stock stock) {
-        return StockDisplayText.board(this, stock);
+        return StockDetailCards.company(this, ui, stock);
     }
 
     /**
@@ -2324,10 +2030,11 @@ public class MainActivity extends AppCompatActivity {
     private View newsList(final Stock stock) {
         LinearLayout list = vertical();
         ArrayList<News> news = buildNews(stock);
+        ArrayList<News> cachedNews = cachedNews(stock);
         android.util.Log.d(TAG, "newsList code=" + stock.code
                 + ", displayNewsCount=" + news.size()
-                + ", hasCache=" + (newsCache.get(stock.code) != null));
-        if (newsCache.get(stock.code) == null) {
+                + ", hasCache=" + (cachedNews != null));
+        if (cachedNews == null) {
             LinearLayout loading = card();
             loading.setPadding(dp(16), dp(14), dp(16), dp(14));
             loading.addView(text(getString(R.string.news_loading_title), 16, COLOR_TEXT, true), matchWrap());
@@ -2482,37 +2189,28 @@ public class MainActivity extends AppCompatActivity {
      * 舆情观点列表。
      */
     private View opinionList(final Stock stock) {
-        LinearLayout list = vertical();
         ArrayList<Opinion> opinions = buildOpinions(stock);
-        if (opinionCache.get(stock.code) == null) {
-            LinearLayout loading = card();
-            loading.setPadding(dp(16), dp(14), dp(16), dp(14));
-            loading.addView(text(getString(R.string.opinion_loading_title), 16, COLOR_TEXT, true), matchWrap());
-            loading.addView(spacer(5));
-            loading.addView(text(getString(R.string.opinion_loading_desc), 12, COLOR_SUB, false), matchWrap());
-            list.addView(loading, matchWrap());
-            list.addView(spacer(10));
+        boolean loading = cachedOpinions(stock) == null;
+        if (loading) {
             loadStockOpinions(stock);
         }
-        ArrayList<String> sources = getOpinionSources(opinions);
-        if (sources.size() > 0) {
-            String selectedSource = selectedOpinionSource(stock, sources);
-            list.addView(sourceSwitchBar(stock, sources, selectedSource, false), matchWrap());
-            list.addView(spacer(8));
-            ArrayList<Opinion> sourceOpinions = getOpinionsBySource(opinions, selectedSource);
-            list.addView(sourceHeader(selectedSource, sourceOpinions.size(), "条观点"), matchWrap());
-            list.addView(spacer(8));
-            int displayCount = Math.min(sourceOpinions.size(), 8);
-            for (int j = 0; j < displayCount; j++) {
-                list.addView(opinionRow(stock, sourceOpinions.get(j)), matchWrap());
-                list.addView(spacer(10));
-            }
-            if (sourceOpinions.size() > displayCount) {
-                list.addView(text("仅显示前 " + displayCount + " 条，切换来源查看其他内容", 12, COLOR_SUB, false), matchWrap());
-                list.addView(spacer(10));
-            }
-        }
-        return list;
+        ArrayList<String> sources = StockOpinionListView.sources(opinions);
+        String selectedSource = sources.size() == 0 ? "" : selectedOpinionSource(stock, sources);
+        return StockOpinionListView.create(this, ui, stock, opinions, loading, selectedSource,
+                new StockOpinionListView.Listener() {
+                    @Override
+                    public void onSourceSelected(Stock selectedStock, String source) {
+                        selectedOpinionSources.put(selectedStock.code, source);
+                        if (currentStock != null && selectedStock.code.equals(currentStock.code)) {
+                            refreshSourceSection(selectedStock, false);
+                        }
+                    }
+
+                    @Override
+                    public void onOpinionSelected(Stock selectedStock, Opinion opinion) {
+                        showOpinionDialog(selectedStock, opinion);
+                    }
+                });
     }
 
     /**
@@ -2731,38 +2429,6 @@ public class MainActivity extends AppCompatActivity {
         row.addView(spacer(8, 1));
         row.addView(text(count + " " + suffix, 12, COLOR_SUB, false), wrapWrap());
         return row;
-    }
-
-    /**
-     * 舆情观点行布局。
-     */
-    private View opinionRow(final Stock stock, final Opinion item) {
-            LinearLayout row = card();
-            row.setPadding(dp(12), dp(9), dp(12), dp(9));
-            row.addView(singleLineText(item.title, 14, COLOR_TEXT, true), matchWrap());
-            row.addView(spacer(4));
-            row.addView(singleLineText(item.source + " · " + item.time, 11, COLOR_SUB, false), matchWrap());
-            row.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    showOpinionDialog(stock, item);
-                }
-            });
-            return row;
-    }
-
-    /**
-     * 获取舆情观点数据源列表。
-     */
-    private ArrayList<String> getOpinionSources(ArrayList<Opinion> opinions) {
-        ArrayList<String> sources = new ArrayList<String>();
-        for (int i = 0; i < opinions.size(); i++) {
-            String source = opinions.get(i).source;
-            if (!sources.contains(source)) {
-                sources.add(source);
-            }
-        }
-        return sources;
     }
 
     /**
@@ -3128,34 +2794,6 @@ public class MainActivity extends AppCompatActivity {
             return 2;
         }
         return 1;
-    }
-
-    /**
-     * 获取舆情观点列表根据数据源。
-     */
-    private ArrayList<Opinion> getOpinionsBySource(ArrayList<Opinion> opinions, String source) {
-        ArrayList<Opinion> result = new ArrayList<Opinion>();
-        for (int i = 0; i < opinions.size(); i++) {
-            Opinion opinion = opinions.get(i);
-            if (source.equals(opinion.source)) {
-                result.add(opinion);
-            }
-        }
-        return result;
-    }
-
-    /**
-     * info行布局。
-     */
-    private View infoRow(String label, String value) {
-        LinearLayout row = vertical();
-        row.setPadding(0, dp(7), 0, dp(7));
-        row.addView(text(label, 12, COLOR_SUB, false), matchWrap());
-        row.addView(spacer(2));
-        TextView valueView = text(value, 15, COLOR_TEXT, false);
-        valueView.setLineSpacing(dp(2), 1.0f);
-        row.addView(valueView, matchWrap());
-        return row;
     }
 
     /**
@@ -3591,10 +3229,10 @@ public class MainActivity extends AppCompatActivity {
         if (stock == null) {
             return;
         }
-        DeepSeekAnalysisResult result = deepSeekAnalysisCache.get(stock.code);
+        DeepSeekAnalysisResult result = cachedAnalysis(stock);
         String message;
         if (result == null) {
-            message = loadingDeepSeekCodes.contains(stock.code)
+            message = isLoadingDeepSeek(stock)
                     ? "DeepSeek 正在为信息一致性、新闻情绪等分项生成结构化评分。"
                     : "DeepSeek 分项分析尚未生成。";
         } else if (result.success && result.hasUsableFactors()) {
@@ -3608,7 +3246,7 @@ public class MainActivity extends AppCompatActivity {
                 .setTitle("DeepSeek 分项分析")
                 .setMessage(message)
                 .setPositiveButton(getString(R.string.ok), null);
-        if (!loadingDeepSeekCodes.contains(stock.code) && !isUsableDeepSeekAnalysis(result)) {
+        if (!isLoadingDeepSeek(stock) && !isUsableDeepSeekAnalysis(result)) {
             builder.setNegativeButton("重新分析", new android.content.DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(android.content.DialogInterface dialog, int which) {
@@ -4059,48 +3697,17 @@ public class MainActivity extends AppCompatActivity {
      * 准备详情缓存。
      */
     private void prepareDetailCache(Stock stock) {
-        DetailCache cache = stockRepository.loadDetailCache(stock.code);
-        if (cache.news.size() > 0 && newsCache.get(stock.code) == null) {
-            newsCache.put(stock.code, cache.news);
-        }
-        if (cache.opinions.size() > 0 && opinionCache.get(stock.code) == null) {
-            opinionCache.put(stock.code, cache.opinions);
-        }
-        if (cache.newsFetchedAt > 0L) {
-            newsFetchedAtCache.put(stock.code, cache.newsFetchedAt);
-        }
-        if (cache.opinionFetchedAt > 0L) {
-            opinionFetchedAtCache.put(stock.code, cache.opinionFetchedAt);
-        }
-        if (cache.analysisFetchedAt > 0L) {
-            analysisFetchedAtCache.put(stock.code, cache.analysisFetchedAt);
-        }
-
-        boolean newsExpired = isDetailCacheExpired(newsFetchedAtCache.get(stock.code));
-        boolean opinionExpired = isDetailCacheExpired(opinionFetchedAtCache.get(stock.code));
-        boolean analysisExpired = isDetailCacheExpired(analysisFetchedAtCache.get(stock.code))
-                || newsExpired || opinionExpired;
-        if (!analysisExpired && cache.analysis != null && !isUsableDeepSeekAnalysis(cache.analysis)) {
-            deepSeekAnalysisCache.remove(stock.code);
-            analysisFetchedAtCache.remove(stock.code);
-            stockRepository.clearDetailAnalysis(stock.code);
-        } else if (!analysisExpired && cache.analysis != null && deepSeekAnalysisCache.get(stock.code) == null) {
-            deepSeekAnalysisCache.put(stock.code, cache.analysis);
-        } else if (analysisExpired) {
-            deepSeekAnalysisCache.remove(stock.code);
-            analysisFetchedAtCache.remove(stock.code);
-            stockRepository.clearDetailAnalysis(stock.code);
-        }
+        viewModel.prepareDetailCache(stock);
     }
 
     /**
      * 刷新已过期详情data。
      */
     private void refreshExpiredDetailData(Stock stock) {
-        if (isDetailCacheExpired(newsFetchedAtCache.get(stock.code))) {
+        if (isDetailCacheExpired(newsFetchedAt(stock))) {
             loadStockNews(stock);
         }
-        if (isDetailCacheExpired(opinionFetchedAtCache.get(stock.code))) {
+        if (isDetailCacheExpired(opinionFetchedAt(stock))) {
             loadStockOpinions(stock);
         }
     }
@@ -4114,61 +3721,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 保存详情新闻资讯。
-     */
-    private void saveDetailNews(Stock stock, ArrayList<News> news) {
-        long nowMillis = System.currentTimeMillis();
-        newsFetchedAtCache.put(stock.code, nowMillis);
-        invalidateDetailAnalysis(stock.code);
-        DetailCache cache = stockRepository.loadDetailCache(stock.code);
-        cache.stockCode = stock.code;
-        cache.news = news;
-        cache.newsFetchedAt = nowMillis;
-        cache.analysis = null;
-        cache.analysisFetchedAt = 0L;
-        stockRepository.saveDetailCache(cache);
-    }
-
-    /**
-     * 保存详情舆情观点列表。
-     */
-    private void saveDetailOpinions(Stock stock, ArrayList<Opinion> opinions) {
-        long nowMillis = System.currentTimeMillis();
-        opinionFetchedAtCache.put(stock.code, nowMillis);
-        invalidateDetailAnalysis(stock.code);
-        DetailCache cache = stockRepository.loadDetailCache(stock.code);
-        cache.stockCode = stock.code;
-        cache.opinions = opinions;
-        cache.opinionFetchedAt = nowMillis;
-        cache.analysis = null;
-        cache.analysisFetchedAt = 0L;
-        stockRepository.saveDetailCache(cache);
-    }
-
-    /**
-     * 保存详情analysis。
-     */
-    private void saveDetailAnalysis(Stock stock, DeepSeekAnalysisResult result) {
-        if (!isUsableDeepSeekAnalysis(result)) {
-            analysisFetchedAtCache.remove(stock.code);
-            return;
-        }
-        long nowMillis = System.currentTimeMillis();
-        analysisFetchedAtCache.put(stock.code, nowMillis);
-        DetailCache cache = stockRepository.loadDetailCache(stock.code);
-        cache.stockCode = stock.code;
-        cache.analysis = result;
-        cache.analysisFetchedAt = nowMillis;
-        stockRepository.saveDetailCache(cache);
-    }
-
-    /**
      * 使失效详情analysis。
      */
     private void invalidateDetailAnalysis(String stockCode) {
-        deepSeekAnalysisCache.remove(stockCode);
-        analysisFetchedAtCache.remove(stockCode);
-        stockRepository.clearDetailAnalysis(stockCode);
+        viewModel.clearDetailAnalysis(stockCode);
     }
 
     /**
@@ -4182,7 +3738,7 @@ public class MainActivity extends AppCompatActivity {
      * 构建新闻资讯。
      */
     private ArrayList<News> buildNews(Stock stock) {
-        ArrayList<News> cachedNews = newsCache.get(stock.code);
+        ArrayList<News> cachedNews = cachedNews(stock);
         if (cachedNews != null && cachedNews.size() > 0) {
             android.util.Log.d(TAG, "buildNews use fetched news code=" + stock.code + ", count=" + cachedNews.size());
             return cachedNews;
@@ -4197,7 +3753,7 @@ public class MainActivity extends AppCompatActivity {
      * 构建舆情观点列表。
      */
     private ArrayList<Opinion> buildOpinions(Stock stock) {
-        ArrayList<Opinion> cachedOpinions = opinionCache.get(stock.code);
+        ArrayList<Opinion> cachedOpinions = cachedOpinions(stock);
         if (cachedOpinions != null) {
             return cachedOpinions;
         }
@@ -4282,7 +3838,7 @@ public class MainActivity extends AppCompatActivity {
             return false;
         }
         for (int i = 0; i < stocks.size(); i++) {
-            if (newsCache.get(stocks.get(i).code) == null) {
+            if (cachedNews(stocks.get(i)) == null) {
                 return true;
             }
         }
@@ -4296,7 +3852,7 @@ public class MainActivity extends AppCompatActivity {
         ArrayList<News> result = new ArrayList<News>();
         for (int i = 0; i < stocks.size(); i++) {
             Stock stock = stocks.get(i);
-            ArrayList<News> cached = newsCache.get(stock.code);
+            ArrayList<News> cached = cachedNews(stock);
             if (cached != null) {
                 addFeedNews(result, cached);
             }
@@ -4346,7 +3902,7 @@ public class MainActivity extends AppCompatActivity {
      * 安全新闻资讯foranalysis。
      */
     private ArrayList<News> safeNewsForAnalysis(Stock stock) {
-        ArrayList<News> cachedNews = newsCache.get(stock.code);
+        ArrayList<News> cachedNews = cachedNews(stock);
         return cachedNews == null ? new ArrayList<News>() : cachedNews;
     }
 
@@ -4442,25 +3998,8 @@ public class MainActivity extends AppCompatActivity {
         boolean changed = false;
         for (int i = 0; i < displayStocks.size(); i++) {
             Stock stock = displayStocks.get(i);
-            DeepSeekAnalysisResult memoryAnalysis = deepSeekAnalysisCache.get(stock.code);
-            Long memoryFetchedAt = analysisFetchedAtCache.get(stock.code);
-            if (memoryAnalysis != null && isDetailCacheExpired(memoryFetchedAt)) {
-                deepSeekAnalysisCache.remove(stock.code);
-                analysisFetchedAtCache.remove(stock.code);
-                stockRepository.clearDetailAnalysis(stock.code);
+            if (viewModel.clearExpiredAnalysisIfNeeded(stock.code)) {
                 changed = true;
-                continue;
-            }
-
-            if (memoryAnalysis == null || memoryFetchedAt == null) {
-                DetailCache cache = stockRepository.loadDetailCache(stock.code);
-                Long cacheFetchedAt = cache.analysisFetchedAt > 0L
-                        ? Long.valueOf(cache.analysisFetchedAt)
-                        : null;
-                if (cache.analysis != null && isDetailCacheExpired(cacheFetchedAt)) {
-                    stockRepository.clearDetailAnalysis(stock.code);
-                    changed = true;
-                }
             }
         }
         return changed;

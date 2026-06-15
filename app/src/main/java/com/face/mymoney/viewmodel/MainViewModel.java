@@ -193,12 +193,21 @@ public class MainViewModel extends AndroidViewModel {
             opinionFetchedAtCache.put(stock.code, cache.opinionFetchedAt);
         }
         
-        boolean analysisExpired = isDetailCacheExpired(cache.analysisFetchedAt);
+        boolean newsExpired = isDetailCacheExpired(cache.newsFetchedAt);
+        boolean opinionExpired = isDetailCacheExpired(cache.opinionFetchedAt);
+        boolean analysisExpired = isDetailCacheExpired(cache.analysisFetchedAt)
+                || newsExpired || opinionExpired;
         if (!analysisExpired && cache.analysis != null && !isUsableDeepSeekAnalysis(cache.analysis)) {
             stockRepository.clearDetailAnalysis(stock.code);
         } else if (!analysisExpired && cache.analysis != null) {
             deepSeekAnalysisCache.put(stock.code, cache.analysis);
             analysisFetchedAtCache.put(stock.code, cache.analysisFetchedAt);
+        } else if (analysisExpired) {
+            deepSeekAnalysisCache.remove(stock.code);
+            analysisFetchedAtCache.remove(stock.code);
+            if (cache.analysis != null) {
+                stockRepository.clearDetailAnalysis(stock.code);
+            }
         }
     }
 
@@ -508,6 +517,46 @@ public class MainViewModel extends AndroidViewModel {
     public boolean isDetailCacheExpired(Long fetchedAt) {
         return fetchedAt == null || fetchedAt <= 0L
                 || System.currentTimeMillis() - fetchedAt > DETAIL_CACHE_TTL_MILLIS;
+    }
+
+    public void invalidateDetailInputs(String stockCode) {
+        if (stockCode == null || stockCode.length() == 0) {
+            return;
+        }
+        newsFetchedAtCache.remove(stockCode);
+        opinionFetchedAtCache.remove(stockCode);
+        invalidateDetailAnalysis(stockCode);
+    }
+
+    public void clearDetailAnalysis(String stockCode) {
+        if (stockCode == null || stockCode.length() == 0) {
+            return;
+        }
+        invalidateDetailAnalysis(stockCode);
+    }
+
+    public boolean clearExpiredAnalysisIfNeeded(String stockCode) {
+        if (stockCode == null || stockCode.length() == 0) {
+            return false;
+        }
+        DeepSeekAnalysisResult memoryAnalysis = deepSeekAnalysisCache.get(stockCode);
+        Long memoryFetchedAt = analysisFetchedAtCache.get(stockCode);
+        if (memoryAnalysis != null && isDetailCacheExpired(memoryFetchedAt)) {
+            invalidateDetailAnalysis(stockCode);
+            return true;
+        }
+
+        if (memoryAnalysis == null || memoryFetchedAt == null) {
+            DetailCache cache = stockRepository.loadDetailCache(stockCode);
+            Long cacheFetchedAt = cache.analysisFetchedAt > 0L
+                    ? Long.valueOf(cache.analysisFetchedAt)
+                    : null;
+            if (cache.analysis != null && isDetailCacheExpired(cacheFetchedAt)) {
+                stockRepository.clearDetailAnalysis(stockCode);
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isUsableDeepSeekAnalysis(DeepSeekAnalysisResult result) {

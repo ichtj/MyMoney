@@ -36,7 +36,7 @@ public class WebPageSource {
         source.parserType = object.optString("parserType", "html");
         source.enabled = object.optBoolean("enabled", true);
         source.charset = object.optString("charset", "UTF-8");
-        source.userAgent = object.optString("userAgent", "MyMoneyBot/1.0");
+        source.userAgent = object.optString("userAgent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
         source.delayMillis = object.optInt("delayMillis", 3000);
         source.timeoutMillis = object.optInt("timeoutMillis", 15000);
 

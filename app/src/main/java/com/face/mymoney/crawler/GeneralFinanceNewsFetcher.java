@@ -43,7 +43,7 @@ public class GeneralFinanceNewsFetcher {
     private void fetchEastmoneyHtml(ArrayList<News> target, String url, String sourceName) {
         android.util.Log.d(TAG, "fetchHtml start source=" + sourceName + ", url=" + url);
         SimpleHttpClient.HttpText response = httpClient.get(url, TIMEOUT_MILLIS, MAX_READ_BYTES,
-                "text/html,application/xhtml+xml,*/*", "Mozilla/5.0 MyMoneyBot/1.0");
+                "text/html,application/xhtml+xml,*/*", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
         android.util.Log.d(TAG, "fetchHtml response source=" + sourceName
                 + ", status=" + response.statusCode
                 + ", length=" + response.body.length()
@@ -109,7 +109,7 @@ public class GeneralFinanceNewsFetcher {
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(TIMEOUT_MILLIS);
             connection.setReadTimeout(TIMEOUT_MILLIS);
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 MyMoneyBot/1.0");
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
             connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,*/*");
             int statusCode = connection.getResponseCode();
             String body = readText(statusCode >= 400 ? connection.getErrorStream() : connection.getInputStream());
@@ -193,7 +193,7 @@ public class GeneralFinanceNewsFetcher {
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(TIMEOUT_MILLIS);
             connection.setReadTimeout(TIMEOUT_MILLIS);
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 MyMoneyBot/1.0");
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
             connection.setRequestProperty("Accept", "application/rss+xml,application/xml,text/xml,*/*");
             int statusCode = connection.getResponseCode();
             String body = readText(statusCode >= 400 ? connection.getErrorStream() : connection.getInputStream());

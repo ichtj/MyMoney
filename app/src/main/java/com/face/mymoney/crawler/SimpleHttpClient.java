@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class SimpleHttpClient {
-    private static final String DEFAULT_USER_AGENT = "Mozilla/5.0 MyMoneyBot/1.0";
+    private static final String DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
     /**
      * 获取。

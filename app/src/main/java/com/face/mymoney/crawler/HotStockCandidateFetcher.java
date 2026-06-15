@@ -31,7 +31,7 @@ public class HotStockCandidateFetcher {
     private static final double MAX_PRICE = 50d;
     private static final double MIN_EFFECTIVE_AMOUNT_YI = 1d;
     private static final double MIN_EFFECTIVE_TURNOVER = 2d;
-    private static final String USER_AGENT = "Mozilla/5.0 MyMoneyBot/1.0";
+    private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
     private final Context context;
     private final SimpleHttpClient httpClient = new SimpleHttpClient();
